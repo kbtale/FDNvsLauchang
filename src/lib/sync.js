@@ -19,11 +19,14 @@ export const getInitialState = () => {
       const parsed = JSON.parse(saved);
       let remaining = (parsed.remainingGames || INITIAL_GAMES).map(fixGameName);
       let drawn = (parsed.drawnGames || []).map(fixGameName);
+      let wheel = parsed.wheelGames ? parsed.wheelGames.map(fixGameName) : null;
       let active = fixGameName(parsed.activeGame);
 
       return {
         remainingGames: remaining,
         drawnGames: drawn,
+        wheelGames: wheel,
+        wheelRotation: typeof parsed.wheelRotation === 'number' ? parsed.wheelRotation : 0,
         fdnScore: typeof parsed.fdnScore === 'number' ? parsed.fdnScore : 0,
         lauchangScore: typeof parsed.lauchangScore === 'number' ? parsed.lauchangScore : 0,
         activeGame: active || null,
@@ -40,6 +43,8 @@ export const getInitialState = () => {
   return {
     remainingGames: [...INITIAL_GAMES],
     drawnGames: [],
+    wheelGames: null,
+    wheelRotation: 0,
     fdnScore: 0,
     lauchangScore: 0,
     activeGame: null,
@@ -58,6 +63,7 @@ export const saveState = (state) => {
       ...state,
       remainingGames: (state.remainingGames || []).map(fixGameName),
       drawnGames: (state.drawnGames || []).map(fixGameName),
+      wheelGames: state.wheelGames ? state.wheelGames.map(fixGameName) : null,
       activeGame: fixGameName(state.activeGame)
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedState));

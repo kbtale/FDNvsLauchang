@@ -22,6 +22,8 @@ const GAME_IMAGE_MAP = {
 
 export default function RouletteWheel({
   remainingGames,
+  wheelGames,
+  wheelRotation = 0,
   isSpinning,
   winningIndex,
   spinSeed,
@@ -32,13 +34,24 @@ export default function RouletteWheel({
   size = 520
 }) {
   const canvasRef = useRef(null);
-  const [rotation, setRotation] = useState(0);
+  const [rotation, setRotation] = useState(wheelRotation || 0);
   const [isTicking, setIsTicking] = useState(false);
   const [activeLogoIndex, setActiveLogoIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
   const animRef = useRef(null);
   const prevSliceIndexRef = useRef(-1);
   const activeSpinSeedRef = useRef(null);
+
+  useEffect(() => {
+    if (!isSpinning && typeof wheelRotation === 'number') {
+      setRotation(wheelRotation);
+    }
+  }, [wheelRotation, isSpinning]);
+
+  const displayedGames = (isSpinning
+    ? remainingGames
+    : (wheelGames && wheelGames.length > 0 ? wheelGames : remainingGames)
+  ).map(fixGameName);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -70,7 +83,7 @@ export default function RouletteWheel({
 
     ctx.clearRect(0, 0, width, height);
 
-    if (!remainingGames || remainingGames.length === 0) {
+    if (!displayedGames || displayedGames.length === 0) {
       ctx.beginPath();
       ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#121917';
@@ -87,8 +100,7 @@ export default function RouletteWheel({
       return;
     }
 
-    const normalizedGames = remainingGames.map(fixGameName);
-    const numSlices = normalizedGames.length;
+    const numSlices = displayedGames.length;
     const sliceAngle = (Math.PI * 2) / numSlices;
 
     ctx.save();
@@ -125,7 +137,7 @@ export default function RouletteWheel({
     }
 
     for (let i = 0; i < numSlices; i++) {
-      const rawGameName = normalizedGames[i];
+      const rawGameName = displayedGames[i];
       const gameName = fixGameName(rawGameName);
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
@@ -204,7 +216,7 @@ export default function RouletteWheel({
     }
 
     ctx.restore();
-  }, [remainingGames, rotation, size, loadedImages]);
+  }, [displayedGames, rotation, size, loadedImages]);
 
   useEffect(() => {
     if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0 && spinSeed) {
@@ -293,14 +305,9 @@ export default function RouletteWheel({
             <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
               {displayWinner}
             </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, fontWeight: 700 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 0, fontWeight: 700 }}>
               FDN VS LAUCHANG
             </p>
-            {onCloseModal && (
-              <button className="btn-white" onClick={onCloseModal}>
-                Cerrar Resultado
-              </button>
-            )}
           </div>
         </div>
       )}

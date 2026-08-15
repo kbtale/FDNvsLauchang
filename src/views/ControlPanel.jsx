@@ -119,12 +119,24 @@ export default function ControlPanel() {
     const selectedGame = gamesPool[randomIndex];
     const spinSeed = Date.now();
 
+    const currentRotation = current.wheelRotation || 0;
+    const numSlices = gamesPool.length;
+    const sliceDeg = 360 / numSlices;
+    const targetSliceCenter = randomIndex * sliceDeg + sliceDeg / 2;
+    const desiredPointerDeg = 270;
+    const targetDeg = (desiredPointerDeg - targetSliceCenter + 360) % 360;
+    const extraSpins = 360 * 7;
+    const currentMod = currentRotation % 360;
+    const targetFinalRotation = currentRotation + extraSpins + ((targetDeg - currentMod + 360) % 360);
+
     const spinningState = {
       ...current,
       isSpinning: true,
       winningIndex: randomIndex,
       showWinnerModal: false,
-      spinSeed: spinSeed
+      spinSeed: spinSeed,
+      wheelGames: gamesPool,
+      wheelRotation: currentRotation
     };
 
     syncEngine.broadcast(spinningState);
@@ -144,6 +156,8 @@ export default function ControlPanel() {
         activeGame: selectedGame,
         remainingGames: remaining,
         drawnGames: drawn,
+        wheelGames: gamesPool,
+        wheelRotation: targetFinalRotation,
         showWinnerModal: true,
         spinSeed: spinSeed
       };
@@ -223,6 +237,8 @@ export default function ControlPanel() {
     const newState = {
       remainingGames: [...INITIAL_GAMES],
       drawnGames: [],
+      wheelGames: null,
+      wheelRotation: 0,
       fdnScore: 0,
       lauchangScore: 0,
       activeGame: null,

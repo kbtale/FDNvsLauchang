@@ -298,19 +298,20 @@ html, body {
 .broadcast-3d-scoreboard {
   width: 95vw;
   max-width: 860px;
-  background-color: #0b1411;
-  border: 3px solid #233a33;
-  border-radius: 14px;
+  background-color: transparent;
   overflow: visible;
   font-family: var(--font-family);
   position: relative;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.85));
 }
 
 .broadcast-3d-main-bar {
   display: grid;
-  grid-template-columns: 1fr 60px 1fr;
+  grid-template-columns: 1fr 70px 1fr;
   height: 105px;
   background-color: #070e0c;
+  border: 3px solid #233a33;
+  border-radius: 14px;
   position: relative;
   overflow: visible;
 }
@@ -329,12 +330,14 @@ html, body {
   background-color: #0d9f67;
   color: #ffffff;
   border-right: 2px solid #08110e;
+  border-radius: 11px 0 0 11px;
 }
 
 .broadcast-3d-team-lauchang {
   background-color: #d99b26;
   color: #091210;
   border-left: 2px solid #08110e;
+  border-radius: 0 11px 11px 0;
 }
 
 .broadcast-3d-score-number {
@@ -361,44 +364,62 @@ html, body {
 }
 
 .broadcast-3d-divider {
-  background-color: #070e0c;
+  background-color: #060b09;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: 30;
+  position: relative;
+  overflow: visible;
+  border-left: 2px solid #1a2f28;
+  border-right: 2px solid #1a2f28;
 }
 
 .broadcast-3d-vs {
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 38px;
+  font-weight: 950;
   color: #d99b26;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(217, 155, 38, 0.8), 0 3px 6px rgba(0, 0, 0, 0.95);
+  transform: scale(1.15);
+  white-space: nowrap;
+  pointer-events: none;
+  font-style: italic;
+}
+
+.broadcast-3d-bottom-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: -3px;
+  position: relative;
+  z-index: 20;
 }
 
 .broadcast-3d-bottom-bar {
-  background-color: #0d1e19;
-  border-top: 2px solid #1c362e;
-  padding: 10px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%);
-}
-
-.broadcast-3d-game-badge {
+  background: linear-gradient(180deg, #0d221c 0%, #060e0b 100%);
+  border: 2px solid #1c3d33;
+  border-top: none;
+  padding: 8px 36px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  background-color: #060c0a;
-  color: #ffffff;
-  padding: 6px 16px;
-  border-radius: 9999px;
-  border: 1px solid #1a3c31;
-  font-size: 13px;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 0 0 14px 14px;
+  clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
+}
+
+.broadcast-3d-game-title {
+  font-size: 20px;
   font-weight: 900;
-  letter-spacing: 1px;
+  letter-spacing: 1.5px;
   text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
 }
 
 .responsive-grid-2 {

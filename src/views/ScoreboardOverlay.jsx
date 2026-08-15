@@ -17,7 +17,7 @@ export default function ScoreboardOverlay() {
       if (newState.fdnScore !== prevFdnRef.current) {
         if (newState.fdnScore > prevFdnRef.current) {
           setFdnBump(true);
-          setTimeout(() => setFdnBump(false), 570);
+          setTimeout(() => setFdnBump(false), 330);
         }
         prevFdnRef.current = newState.fdnScore;
       }
@@ -25,7 +25,7 @@ export default function ScoreboardOverlay() {
       if (newState.lauchangScore !== prevLauchangRef.current) {
         if (newState.lauchangScore > prevLauchangRef.current) {
           setLauchangBump(true);
-          setTimeout(() => setLauchangBump(false), 570);
+          setTimeout(() => setLauchangBump(false), 330);
         }
         prevLauchangRef.current = newState.lauchangScore;
       }
@@ -61,7 +61,7 @@ export default function ScoreboardOverlay() {
                     initial={{ opacity: 0, y: 15, scale: 0.5 }}
                     animate={{ opacity: 1, y: -42, scale: 1.5 }}
                     exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.57, ease: 'easeOut' }}
+                    transition={{ duration: 0.33, ease: 'easeOut' }}
                     style={{ position: 'absolute', top: 0, right: 0, zIndex: 9999 }}
                   >
                     +1
@@ -97,7 +97,7 @@ export default function ScoreboardOverlay() {
                     initial={{ opacity: 0, y: 15, scale: 0.5 }}
                     animate={{ opacity: 1, y: -42, scale: 1.5 }}
                     exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.57, ease: 'easeOut' }}
+                    transition={{ duration: 0.33, ease: 'easeOut' }}
                     style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999 }}
                   >
                     +1

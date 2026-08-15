@@ -177,14 +177,17 @@ export default function RouletteWheel({
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
 
-      ctx.font = '900 17px "Plus Jakarta Sans", sans-serif';
+      const fontSize = gameName.length > 13 ? 13.5 : 16;
+      const textOffset = gameName.length > 13 ? 14 : 22;
+      ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
+      
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 5;
       ctx.lineJoin = 'round';
-      ctx.strokeText(gameName, innerRadius - 22, 0);
+      ctx.strokeText(gameName, innerRadius - textOffset, 0);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(gameName, innerRadius - 22, 0);
+      ctx.fillText(gameName, innerRadius - textOffset, 0);
 
       ctx.restore();
       ctx.restore();

@@ -123,7 +123,7 @@ export default function ControlPanel() {
   };
 
   const updateScore = (team, delta) => {
-    if (!syncEngine) return;
+    if (!syncEngine || state.isSpinning) return;
     const key = team === 'fdn' ? 'fdnScore' : 'lauchangScore';
     const newScore = Math.max(0, state[key] + delta);
     const newState = {
@@ -143,7 +143,7 @@ export default function ControlPanel() {
   };
 
   const removeGameFromWheel = (gameToRemove) => {
-    if (!syncEngine) return;
+    if (!syncEngine || state.isSpinning) return;
     const updatedRemaining = state.remainingGames.filter((g) => g !== gameToRemove);
     const updatedDrawn = state.drawnGames.includes(gameToRemove) ? state.drawnGames : [...state.drawnGames, gameToRemove];
     const newState = {
@@ -155,7 +155,7 @@ export default function ControlPanel() {
   };
 
   const restoreGameToWheel = (gameToRestore) => {
-    if (!syncEngine) return;
+    if (!syncEngine || state.isSpinning) return;
     const updatedDrawn = state.drawnGames.filter((g) => g !== gameToRestore);
     const updatedRemaining = state.remainingGames.includes(gameToRestore) ? state.remainingGames : [...state.remainingGames, gameToRestore];
     const newState = {
@@ -168,7 +168,7 @@ export default function ControlPanel() {
 
   const handleAddCustomGame = (e) => {
     e.preventDefault();
-    if (!syncEngine || !newGameInput.trim()) return;
+    if (!syncEngine || state.isSpinning || !newGameInput.trim()) return;
     const formatted = fixGameName(newGameInput.trim().toUpperCase());
     if (state.remainingGames.includes(formatted)) return;
 
@@ -181,7 +181,7 @@ export default function ControlPanel() {
   };
 
   const confirmResetAll = () => {
-    if (!syncEngine) return;
+    if (!syncEngine || state.isSpinning) return;
     const newState = {
       remainingGames: [...INITIAL_GAMES],
       drawnGames: [],
@@ -299,13 +299,16 @@ export default function ControlPanel() {
             <div style={{ display: 'flex', gap: 12 }}>
               <button
                 className="btn-secondary"
-                style={{ flex: 1 }}
+                style={{ flex: 1, opacity: state.isSpinning ? 0.5 : 1 }}
+                disabled={state.isSpinning}
                 onClick={() => updateScore('fdn', 1)}
               >
                 <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"
+                style={{ opacity: state.isSpinning ? 0.5 : 1 }}
+                disabled={state.isSpinning}
                 onClick={() => updateScore('fdn', -1)}
               >
                 <Minus size={18} />
@@ -329,13 +332,16 @@ export default function ControlPanel() {
             <div style={{ display: 'flex', gap: 12 }}>
               <button
                 className="btn-secondary"
-                style={{ flex: 1 }}
+                style={{ flex: 1, opacity: state.isSpinning ? 0.5 : 1 }}
+                disabled={state.isSpinning}
                 onClick={() => updateScore('lauchang', 1)}
               >
                 <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"
+                style={{ opacity: state.isSpinning ? 0.5 : 1 }}
+                disabled={state.isSpinning}
                 onClick={() => updateScore('lauchang', -1)}
               >
                 <Minus size={18} />
@@ -393,6 +399,7 @@ export default function ControlPanel() {
                 type="text"
                 placeholder="Añadir nuevo juego..."
                 value={newGameInput}
+                disabled={state.isSpinning}
                 onChange={(e) => setNewGameInput(e.target.value)}
                 style={{
                   flex: 1,
@@ -403,10 +410,11 @@ export default function ControlPanel() {
                   color: '#ffffff',
                   outline: 'none',
                   fontSize: 13,
-                  fontWeight: 600
+                  fontWeight: 600,
+                  opacity: state.isSpinning ? 0.5 : 1
                 }}
               />
-              <button type="submit" className="btn-secondary" style={{ padding: '10px 16px' }}>
+              <button type="submit" className="btn-secondary" disabled={state.isSpinning} style={{ padding: '10px 16px', opacity: state.isSpinning ? 0.5 : 1 }}>
                 <Plus size={16} /> Añadir
               </button>
             </form>
@@ -420,9 +428,10 @@ export default function ControlPanel() {
                   <button
                     key={game}
                     className="pill-badge badge-dark"
+                    disabled={state.isSpinning}
                     onClick={() => removeGameFromWheel(game)}
                     title="Haz clic para quitar de la ruleta"
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: state.isSpinning ? 'not-allowed' : 'pointer', opacity: state.isSpinning ? 0.5 : 1 }}
                   >
                     {game} <Trash2 size={12} style={{ opacity: 0.8 }} />
                   </button>
@@ -442,9 +451,10 @@ export default function ControlPanel() {
                   <button
                     key={game}
                     className="pill-badge badge-dark"
+                    disabled={state.isSpinning}
                     onClick={() => restoreGameToWheel(game)}
                     title="Haz clic para devolver a la ruleta"
-                    style={{ cursor: 'pointer', opacity: 0.8 }}
+                    style={{ cursor: state.isSpinning ? 'not-allowed' : 'pointer', opacity: state.isSpinning ? 0.5 : 1 }}
                   >
                     <CheckCircle2 size={12} /> {game} <RotateCw size={12} style={{ marginLeft: 4 }} />
                   </button>
@@ -455,7 +465,7 @@ export default function ControlPanel() {
               </div>
             </div>
 
-            <button className="btn-danger" style={{ width: '100%' }} onClick={() => setShowResetConfirmModal(true)}>
+            <button className="btn-danger" style={{ width: '100%', opacity: state.isSpinning ? 0.5 : 1 }} disabled={state.isSpinning} onClick={() => setShowResetConfirmModal(true)}>
               <RotateCcw size={16} /> Reiniciar Todo el Evento
             </button>
           </div>

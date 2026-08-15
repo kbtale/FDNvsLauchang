@@ -40,7 +40,7 @@ export default function ScoreboardOverlay() {
                   FDN
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
-                  FEEDEN
+                  TEAM FEEDEN
                 </div>
               </div>
             </div>
@@ -63,7 +63,7 @@ export default function ScoreboardOverlay() {
                   LAUCHANG
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
-                  LAUTASHE
+                  TEAM LAUTASHE
                 </div>
               </div>
               <LauchangLogo size={66} />

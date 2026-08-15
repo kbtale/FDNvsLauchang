@@ -120,8 +120,8 @@ export default function ControlPanel() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <FdnLogo size={52} />
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>TEAM FDN</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Feeden</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>FDN</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>TEAM FEEDEN</p>
                 </div>
               </div>
               <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-green)' }}>
@@ -150,8 +150,8 @@ export default function ControlPanel() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <LauchangLogo size={52} />
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>TEAM LAUCHANG</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lautashe</p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>LAUCHANG</h2>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>TEAM LAUTASHE</p>
                 </div>
               </div>
               <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>

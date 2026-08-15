@@ -10,11 +10,11 @@ const SLICE_COLORS = [
 ];
 
 const GAME_IMAGE_MAP = {
-  'FORTNITE': '/games/fortnite.png',
-  'CLASH ROYALE': '/games/clash_royale.png',
-  'COPA ROBLOX': '/games/copa_roblox.png',
-  'COUNTER STRIKE': '/games/counter_strike.png',
-  'FALL GUYS': '/games/fall_guys.png'
+  'FORTNITE': '/games/fortnitebanner.jpg',
+  'CLASH ROYALE': '/games/clashroyalebanner.jpg',
+  'COPA ROBLOX': '/games/robloxbanner.png',
+  'COUNTER-STRIKE 2': '/games/counterstrike.webp',
+  'FALL GUYS': '/games/fallguysbanner.jpg'
 };
 
 export default function RouletteWheel({
@@ -25,7 +25,7 @@ export default function RouletteWheel({
   showWinnerModal,
   activeGame,
   onCloseModal,
-  size = 480
+  size = 500
 }) {
   const canvasRef = useRef(null);
   const [rotation, setRotation] = useState(0);
@@ -43,7 +43,6 @@ export default function RouletteWheel({
   }, []);
 
   useEffect(() => {
-    const images = {};
     Object.entries(GAME_IMAGE_MAP).forEach(([game, src]) => {
       const img = new Image();
       img.src = src;
@@ -61,8 +60,8 @@ export default function RouletteWheel({
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const outerRadius = width / 2 - 10;
-    const innerRadius = outerRadius - 20;
+    const outerRadius = width / 2 - 12;
+    const innerRadius = outerRadius - 22;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -91,16 +90,16 @@ export default function RouletteWheel({
     ctx.fillStyle = '#0a0f0d';
     ctx.fill();
     ctx.strokeStyle = '#22332c';
-    ctx.lineWidth = 14;
+    ctx.lineWidth = 16;
     ctx.stroke();
 
-    const pinCount = 16;
+    const pinCount = 18;
     for (let p = 0; p < pinCount; p++) {
       const pinAngle = (p * Math.PI * 2) / pinCount;
-      const px = centerX + (outerRadius - 7) * Math.cos(pinAngle);
-      const py = centerY + (outerRadius - 7) * Math.sin(pinAngle);
+      const px = centerX + (outerRadius - 8) * Math.cos(pinAngle);
+      const py = centerY + (outerRadius - 8) * Math.sin(pinAngle);
       ctx.beginPath();
-      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
       ctx.fillStyle = '#d99b26';
       ctx.fill();
       ctx.strokeStyle = '#0a0f0d';
@@ -117,34 +116,64 @@ export default function RouletteWheel({
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
 
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.arc(0, 0, innerRadius, startAngle, endAngle);
       ctx.closePath();
+      ctx.clip();
 
       ctx.fillStyle = SLICE_COLORS[i % SLICE_COLORS.length];
       ctx.fill();
+
+      const gameImg = loadedImages[gameName];
+      if (gameImg) {
+        ctx.save();
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.globalAlpha = 0.85;
+        const imgW = innerRadius * 1.2;
+        const imgH = innerRadius * 0.8;
+        ctx.drawImage(gameImg, 30, -imgH / 2, imgW, imgH);
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(10, 15, 13, 0.4)';
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, innerRadius, startAngle, endAngle);
       ctx.strokeStyle = '#0a0f0d';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.stroke();
 
       ctx.save();
       ctx.rotate(startAngle + sliceAngle / 2);
 
-      const gameImg = loadedImages[gameName];
-      if (gameImg) {
-        ctx.drawImage(gameImg, innerRadius - 90, -22, 44, 44);
-      }
+      ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
+      const textWidth = ctx.measureText(gameName).width;
+
+      ctx.fillStyle = 'rgba(8, 12, 10, 0.85)';
+      ctx.beginPath();
+      ctx.roundRect(innerRadius - textWidth - 36, -15, textWidth + 24, 30, 15);
+      ctx.fill();
+      ctx.strokeStyle = '#0d9f67';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#000000';
-      ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(gameName, innerRadius - (gameImg ? 95 : 20) + 2, 2);
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 5;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(gameName, innerRadius - 24, 0);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(gameName, innerRadius - (gameImg ? 95 : 20), 0);
+      ctx.fillText(gameName, innerRadius - 24, 0);
+
+      ctx.restore();
       ctx.restore();
     }
 
@@ -216,13 +245,16 @@ export default function RouletteWheel({
       />
 
       <div className="roulette-center-hub">
-        <div className={`hub-logo-container ${activeLogoIndex === 1 ? 'hub-logo-flip' : ''}`}>
-          <img
-            src={activeLogoIndex === 0 ? '/LOGO FDN.png' : '/LOGO LAUTASHE.jpeg'}
-            alt="Center Hub Logo"
-            className="hub-logo-img"
-          />
-        </div>
+        <img
+          src="/LOGO FDN.png"
+          alt="FDN Logo"
+          className={`hub-logo-img ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
+        />
+        <img
+          src="/LOGO LAUTASHE.jpeg"
+          alt="Lautashe Logo"
+          className={`hub-logo-img ${activeLogoIndex === 1 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
+        />
       </div>
 
       {showWinnerModal && activeGame && (
@@ -231,7 +263,7 @@ export default function RouletteWheel({
             <div className="pill-badge badge-green" style={{ marginBottom: 16 }}>
               ¡JUEGO SELECCIONADO!
             </div>
-            <h1 style={{ fontSize: 38, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, textShadow: '0 4px 0 rgba(0,0,0,0.3)' }}>
+            <h1 style={{ fontSize: 38, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
               {activeGame}
             </h1>
             <p style={{ fontSize: 15, opacity: 0.8, marginBottom: 28, fontWeight: 600 }}>

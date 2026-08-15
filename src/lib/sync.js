@@ -1,15 +1,23 @@
-const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER STRIKE', 'FALL GUYS'];
-const STORAGE_KEY = 'fdn_vs_lauchang_state_v1';
-const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v1';
+const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
+const STORAGE_KEY = 'fdn_vs_lauchang_state_v2';
+const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v2';
+
+const normalizeGameName = (name) => {
+  if (!name) return name;
+  if (name === 'CS' || name === 'COUNTER STRIKE' || name === 'COUNTER STRIKE 2') {
+    return 'COUNTER-STRIKE 2';
+  }
+  return name;
+};
 
 export const getInitialState = () => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(g => g === 'CS' ? 'COUNTER STRIKE' : g);
-      let drawn = (parsed.drawnGames || []).map(g => g === 'CS' ? 'COUNTER STRIKE' : g);
-      let active = parsed.activeGame === 'CS' ? 'COUNTER STRIKE' : parsed.activeGame;
+      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(normalizeGameName);
+      let drawn = (parsed.drawnGames || []).map(normalizeGameName);
+      let active = normalizeGameName(parsed.activeGame);
 
       return {
         remainingGames: remaining,

@@ -1,6 +1,7 @@
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
-const STORAGE_KEY = 'fdn_vs_lauchang_state_v3';
-const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v3';
+const STORAGE_KEY = 'fdn_vs_lauchang_state_v4';
+const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v4';
+const FIREBASE_SYNC_URL = 'https://fdn-vs-lauchang-default-rtdb.firebaseio.com/room_fdn_lauchang.json';
 
 const fixGameName = (name) => {
   if (!name) return name;
@@ -13,7 +14,6 @@ const fixGameName = (name) => {
 
 export const getInitialState = () => {
   try {
-    ['fdn_vs_lauchang_state_v1', 'fdn_vs_lauchang_state_v2'].forEach(k => localStorage.removeItem(k));
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
@@ -66,6 +66,7 @@ export class SyncEngine {
     this.channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
       ? new BroadcastChannel(CHANNEL_NAME)
       : null;
+    this.eventSource = null;
 
     this.handleMessage = (event) => {
       if (event.data && this.onStateUpdate) {
@@ -102,7 +103,33 @@ export class SyncEngine {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', this.handleStorage);
+      this.initCloudSync();
     }
+  }
+
+  initCloudSync() {
+    try {
+      this.eventSource = new EventSource(FIREBASE_SYNC_URL);
+      this.eventSource.onmessage = (e) => {
+        if (!e.data) return;
+        try {
+          const res = JSON.parse(e.data);
+          const payload = res.data || res;
+          if (payload && typeof payload === 'object' && payload.remainingGames) {
+            const cleaned = {
+              ...payload,
+              remainingGames: (payload.remainingGames || []).map(fixGameName),
+              drawnGames: (payload.drawnGames || []).map(fixGameName),
+              activeGame: fixGameName(payload.activeGame)
+            };
+            saveState(cleaned);
+            if (this.onStateUpdate) {
+              this.onStateUpdate(cleaned);
+            }
+          }
+        } catch (err) {}
+      };
+    } catch (err) {}
   }
 
   broadcast(state) {
@@ -112,10 +139,21 @@ export class SyncEngine {
       drawnGames: (state.drawnGames || []).map(fixGameName),
       activeGame: fixGameName(state.activeGame)
     };
+
     saveState(cleanedState);
+
     if (this.channel) {
       this.channel.postMessage(cleanedState);
     }
+
+    if (typeof fetch !== 'undefined') {
+      fetch(FIREBASE_SYNC_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanedState)
+      }).catch(() => {});
+    }
+
     if (this.onStateUpdate) {
       this.onStateUpdate(cleanedState);
     }
@@ -124,6 +162,9 @@ export class SyncEngine {
   destroy() {
     if (this.channel) {
       this.channel.close();
+    }
+    if (this.eventSource) {
+      this.eventSource.close();
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', this.handleStorage);

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { SyncEngine, getInitialState, INITIAL_GAMES } from '../lib/sync';
+import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
-import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2 } from 'lucide-react';
+import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw } from 'lucide-react';
 
 export default function ControlPanel() {
   const [state, setState] = useState(getInitialState);
   const [syncEngine, setSyncEngine] = useState(null);
+  const [newGameInput, setNewGameInput] = useState('');
 
   useEffect(() => {
     const engine = new SyncEngine((newState) => {
@@ -29,24 +30,6 @@ export default function ControlPanel() {
     syncEngine.broadcast(newState);
   };
 
-  const handleFinishSpin = () => {
-    if (state.winningIndex === null || !state.remainingGames[state.winningIndex]) return;
-    const selected = state.remainingGames[state.winningIndex];
-    const newRemaining = state.remainingGames.filter((_, idx) => idx !== state.winningIndex);
-    const newDrawn = [...state.drawnGames, selected];
-
-    const newState = {
-      ...state,
-      isSpinning: false,
-      winningIndex: null,
-      activeGame: selected,
-      remainingGames: newRemaining,
-      drawnGames: newDrawn,
-      showWinnerModal: true
-    };
-    syncEngine.broadcast(newState);
-  };
-
   const updateScore = (team, delta) => {
     const key = team === 'fdn' ? 'fdnScore' : 'lauchangScore';
     const newScore = Math.max(0, state[key] + delta);
@@ -63,6 +46,42 @@ export default function ControlPanel() {
       showWinnerModal: false
     };
     syncEngine.broadcast(newState);
+  };
+
+  const removeGameFromWheel = (gameToRemove) => {
+    const updatedRemaining = state.remainingGames.filter((g) => g !== gameToRemove);
+    const updatedDrawn = state.drawnGames.includes(gameToRemove) ? state.drawnGames : [...state.drawnGames, gameToRemove];
+    const newState = {
+      ...state,
+      remainingGames: updatedRemaining,
+      drawnGames: updatedDrawn
+    };
+    syncEngine.broadcast(newState);
+  };
+
+  const restoreGameToWheel = (gameToRestore) => {
+    const updatedDrawn = state.drawnGames.filter((g) => g !== gameToRestore);
+    const updatedRemaining = state.remainingGames.includes(gameToRestore) ? state.remainingGames : [...state.remainingGames, gameToRestore];
+    const newState = {
+      ...state,
+      remainingGames: updatedRemaining,
+      drawnGames: updatedDrawn
+    };
+    syncEngine.broadcast(newState);
+  };
+
+  const handleAddCustomGame = (e) => {
+    e.preventDefault();
+    if (!newGameInput.trim()) return;
+    const formatted = fixGameName(newGameInput.trim().toUpperCase());
+    if (state.remainingGames.includes(formatted)) return;
+
+    const newState = {
+      ...state,
+      remainingGames: [...state.remainingGames, formatted]
+    };
+    syncEngine.broadcast(newState);
+    setNewGameInput('');
   };
 
   const resetAll = () => {
@@ -196,12 +215,6 @@ export default function ControlPanel() {
               >
                 <Play size={20} fill="currentColor" /> {state.isSpinning ? 'Girando...' : 'GIRAR RULETA'}
               </button>
-
-              {state.isSpinning && (
-                <button className="btn-secondary" onClick={handleFinishSpin}>
-                  Forzar Resultado
-                </button>
-              )}
             </div>
 
             {state.activeGame && (
@@ -223,30 +236,69 @@ export default function ControlPanel() {
 
           <div className="card-panel">
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Trophy size={22} color="var(--accent-green)" /> Estado de Juegos
+              <Trophy size={22} color="var(--accent-green)" /> Gestión de Juegos
             </h2>
 
+            <form onSubmit={handleAddCustomGame} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <input
+                type="text"
+                placeholder="Añadir nuevo juego..."
+                value={newGameInput}
+                onChange={(e) => setNewGameInput(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  borderRadius: 9999,
+                  backgroundColor: 'var(--panel-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  color: '#ffffff',
+                  outline: 'none',
+                  fontSize: 13,
+                  fontWeight: 600
+                }}
+              />
+              <button type="submit" className="btn-secondary" style={{ padding: '10px 16px' }}>
+                <Plus size={16} /> Añadir
+              </button>
+            </form>
+
             <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>Juegos Disponibles</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
+                En Ruleta (haz clic para quitar):
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {state.remainingGames.map((game) => (
-                  <span key={game} className="pill-badge badge-green">
-                    {game}
-                  </span>
+                  <button
+                    key={game}
+                    className="pill-badge badge-green"
+                    onClick={() => removeGameFromWheel(game)}
+                    title="Haz clic para quitar de la ruleta"
+                    style={{ cursor: 'pointer', border: 'none' }}
+                  >
+                    {game} <Trash2 size={12} style={{ opacity: 0.8 }} />
+                  </button>
                 ))}
                 {state.remainingGames.length === 0 && (
-                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ninguno</span>
+                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ninguno en ruleta</span>
                 )}
               </div>
             </div>
 
             <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>Juegos Jugados (Eliminados)</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
+                Eliminados (haz clic para restaurar):
+              </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {state.drawnGames.map((game) => (
-                  <span key={game} className="pill-badge badge-dark" style={{ opacity: 0.6, textDecoration: 'line-through' }}>
-                    <CheckCircle2 size={12} /> {game}
-                  </span>
+                  <button
+                    key={game}
+                    className="pill-badge badge-dark"
+                    onClick={() => restoreGameToWheel(game)}
+                    title="Haz clic para devolver a la ruleta"
+                    style={{ cursor: 'pointer', opacity: 0.8 }}
+                  >
+                    <CheckCircle2 size={12} /> {game} <RotateCw size={12} style={{ marginLeft: 4 }} />
+                  </button>
                 ))}
                 {state.drawnGames.length === 0 && (
                   <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ninguno aún</span>

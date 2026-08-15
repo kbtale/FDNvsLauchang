@@ -8,6 +8,7 @@ const SESSION_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
 
 export default function ControlPanel() {
   const [state, setState] = useState(getInitialState);
+  const stateRef = useRef(state);
   const [syncEngine, setSyncEngine] = useState(null);
   const [newGameInput, setNewGameInput] = useState('');
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
@@ -15,7 +16,11 @@ export default function ControlPanel() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const fallbackTimerRef = useRef(null);
+  const spinTimerRef = useRef(null);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
@@ -38,19 +43,36 @@ export default function ControlPanel() {
   useEffect(() => {
     if (isAuthenticated) {
       const engine = new SyncEngine((newState) => {
-        if (!newState.isSpinning && fallbackTimerRef.current) {
-          clearTimeout(fallbackTimerRef.current);
-          fallbackTimerRef.current = null;
-        }
         setState(newState);
       });
       setSyncEngine(engine);
       return () => {
-        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
         engine.destroy();
       };
     }
   }, [isAuthenticated]);
+
+  // Safety watchdog: Automatically un-sticks spin state if it gets stuck for more than 7.5 seconds
+  useEffect(() => {
+    let safetyTimer = null;
+    if (state.isSpinning && syncEngine) {
+      safetyTimer = setTimeout(() => {
+        if (stateRef.current.isSpinning) {
+          console.warn('Auto-unlocking stuck spin state');
+          const latest = stateRef.current;
+          const finalState = {
+            ...latest,
+            isSpinning: false
+          };
+          syncEngine.broadcast(finalState);
+        }
+      }, 7500);
+    }
+    return () => {
+      if (safetyTimer) clearTimeout(safetyTimer);
+    };
+  }, [state.isSpinning, syncEngine]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -89,56 +111,54 @@ export default function ControlPanel() {
   };
 
   const triggerSpin = () => {
-    if (!syncEngine || state.isSpinning || !state.remainingGames || state.remainingGames.length === 0) return;
+    const current = stateRef.current;
+    if (!syncEngine || current.isSpinning || !current.remainingGames || current.remainingGames.length === 0) return;
 
-    const randomIndex = Math.floor(Math.random() * state.remainingGames.length);
+    const gamesPool = [...current.remainingGames];
+    const randomIndex = Math.floor(Math.random() * gamesPool.length);
+    const selectedGame = gamesPool[randomIndex];
     const spinSeed = Date.now();
-    const initiatorId = syncEngine.clientId;
 
     const spinningState = {
-      ...state,
+      ...current,
       isSpinning: true,
       winningIndex: randomIndex,
       showWinnerModal: false,
-      spinSeed: spinSeed,
-      spinInitiator: initiatorId
+      spinSeed: spinSeed
     };
 
     syncEngine.broadcast(spinningState);
 
-    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = setTimeout(() => {
-      const currentState = state;
-      const currentRemaining = currentState.remainingGames || [];
-      if (currentRemaining.length > 0) {
-        const safeIndex = (randomIndex >= 0 && randomIndex < currentRemaining.length) ? randomIndex : 0;
-        const selected = currentRemaining[safeIndex];
-        const newRemaining = currentRemaining.filter((_, idx) => idx !== safeIndex);
-        const newDrawn = (currentState.drawnGames || []).includes(selected)
-          ? currentState.drawnGames
-          : [...(currentState.drawnGames || []), selected];
+    if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+    spinTimerRef.current = setTimeout(() => {
+      const latest = stateRef.current;
+      const remaining = (latest.remainingGames || []).filter((g) => g !== selectedGame);
+      const drawn = (latest.drawnGames || []).includes(selectedGame)
+        ? latest.drawnGames
+        : [...(latest.drawnGames || []), selectedGame];
 
-        const finalState = {
-          ...currentState,
-          isSpinning: false,
-          winningIndex: null,
-          activeGame: selected,
-          remainingGames: newRemaining,
-          drawnGames: newDrawn,
-          showWinnerModal: true,
-          spinInitiator: null
-        };
-        syncEngine.broadcast(finalState);
-      }
-    }, 5600);
+      const finalState = {
+        ...latest,
+        isSpinning: false,
+        winningIndex: null,
+        activeGame: selectedGame,
+        remainingGames: remaining,
+        drawnGames: drawn,
+        showWinnerModal: true,
+        spinSeed: spinSeed
+      };
+      syncEngine.broadcast(finalState);
+      spinTimerRef.current = null;
+    }, 5400);
   };
 
   const updateScore = (team, delta) => {
-    if (!syncEngine || state.isSpinning) return;
+    if (!syncEngine) return;
+    const latest = stateRef.current;
     const key = team === 'fdn' ? 'fdnScore' : 'lauchangScore';
-    const newScore = Math.max(0, state[key] + delta);
+    const newScore = Math.max(0, (latest[key] || 0) + delta);
     const newState = {
-      ...state,
+      ...latest,
       [key]: newScore
     };
     syncEngine.broadcast(newState);
@@ -147,7 +167,7 @@ export default function ControlPanel() {
   const closeModal = () => {
     if (!syncEngine) return;
     const newState = {
-      ...state,
+      ...stateRef.current,
       showWinnerModal: false
     };
     syncEngine.broadcast(newState);
@@ -155,10 +175,11 @@ export default function ControlPanel() {
 
   const removeGameFromWheel = (gameToRemove) => {
     if (!syncEngine || state.isSpinning) return;
-    const updatedRemaining = state.remainingGames.filter((g) => g !== gameToRemove);
-    const updatedDrawn = state.drawnGames.includes(gameToRemove) ? state.drawnGames : [...state.drawnGames, gameToRemove];
+    const latest = stateRef.current;
+    const updatedRemaining = latest.remainingGames.filter((g) => g !== gameToRemove);
+    const updatedDrawn = latest.drawnGames.includes(gameToRemove) ? latest.drawnGames : [...latest.drawnGames, gameToRemove];
     const newState = {
-      ...state,
+      ...latest,
       remainingGames: updatedRemaining,
       drawnGames: updatedDrawn
     };
@@ -167,10 +188,11 @@ export default function ControlPanel() {
 
   const restoreGameToWheel = (gameToRestore) => {
     if (!syncEngine || state.isSpinning) return;
-    const updatedDrawn = state.drawnGames.filter((g) => g !== gameToRestore);
-    const updatedRemaining = state.remainingGames.includes(gameToRestore) ? state.remainingGames : [...state.remainingGames, gameToRestore];
+    const latest = stateRef.current;
+    const updatedDrawn = latest.drawnGames.filter((g) => g !== gameToRestore);
+    const updatedRemaining = latest.remainingGames.includes(gameToRestore) ? latest.remainingGames : [...latest.remainingGames, gameToRestore];
     const newState = {
-      ...state,
+      ...latest,
       remainingGames: updatedRemaining,
       drawnGames: updatedDrawn
     };
@@ -181,18 +203,23 @@ export default function ControlPanel() {
     e.preventDefault();
     if (!syncEngine || state.isSpinning || !newGameInput.trim()) return;
     const formatted = fixGameName(newGameInput.trim().toUpperCase());
-    if (state.remainingGames.includes(formatted)) return;
+    const latest = stateRef.current;
+    if (latest.remainingGames.includes(formatted)) return;
 
     const newState = {
-      ...state,
-      remainingGames: [...state.remainingGames, formatted]
+      ...latest,
+      remainingGames: [...latest.remainingGames, formatted]
     };
     syncEngine.broadcast(newState);
     setNewGameInput('');
   };
 
   const confirmResetAll = () => {
-    if (!syncEngine || state.isSpinning) return;
+    if (!syncEngine) return;
+    if (spinTimerRef.current) {
+      clearTimeout(spinTimerRef.current);
+      spinTimerRef.current = null;
+    }
     const newState = {
       remainingGames: [...INITIAL_GAMES],
       drawnGames: [],
@@ -476,7 +503,7 @@ export default function ControlPanel() {
               </div>
             </div>
 
-            <button className="btn-danger" style={{ width: '100%', opacity: state.isSpinning ? 0.5 : 1 }} disabled={state.isSpinning} onClick={() => setShowResetConfirmModal(true)}>
+            <button className="btn-danger" style={{ width: '100%' }} onClick={() => setShowResetConfirmModal(true)}>
               <RotateCcw size={16} /> Reiniciar Todo el Evento
             </button>
           </div>

@@ -121,7 +121,10 @@ export class SyncEngine {
     }
 
     const hash = this.computeHash(payload);
-    if (hash === this.lastStateHash && incomingUpdatedAt === this.lastUpdatedAt) {
+    
+    // If the core state is identical to our current state, do NOT trigger redundant re-renders
+    if (hash === this.lastStateHash) {
+      this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
       return;
     }
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
+import { Gamepad2, Trophy, Flame } from 'lucide-react';
 
 export default function ScoreboardOverlay() {
   const [state, setState] = useState(getInitialState);
@@ -14,12 +15,12 @@ export default function ScoreboardOverlay() {
     const engine = new SyncEngine((newState) => {
       if (newState.fdnScore !== prevFdnRef.current) {
         setFdnBump(true);
-        setTimeout(() => setFdnBump(false), 400);
+        setTimeout(() => setFdnBump(false), 450);
         prevFdnRef.current = newState.fdnScore;
       }
       if (newState.lauchangScore !== prevLauchangRef.current) {
         setLauchangBump(true);
-        setTimeout(() => setLauchangBump(false), 400);
+        setTimeout(() => setLauchangBump(false), 450);
         prevLauchangRef.current = newState.lauchangScore;
       }
       setState(newState);
@@ -27,107 +28,74 @@ export default function ScoreboardOverlay() {
     return () => engine.destroy();
   }, []);
 
+  const playedCount = state.drawnGames ? state.drawnGames.length : 0;
+
   return (
-    <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 20 }}>
-      <div
-        className="card-panel"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 24,
-          padding: '12px 28px',
-          borderRadius: 9999,
-          backgroundColor: '#0d2620',
-          border: '2px solid #194439'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <FdnLogo size={42} />
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 0.5, color: '#ffffff' }}>
-              FDN
+    <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 24 }}>
+      <div className="broadcast-scoreboard">
+        <div className="broadcast-main-bar">
+          <div className="broadcast-team-card broadcast-team-fdn">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <FdnLogo size={58} />
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5, lineHeight: 1 }}>
+                  FDN
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.85, marginTop: 4, letterSpacing: 1 }}>
+                  TEAM FEEDEN
+                </div>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>
-              TEAM FEEDEN
+            <div className={`broadcast-score-number ${fdnBump ? 'animate-score-pop' : ''}`}>
+              {state.fdnScore}
             </div>
           </div>
-          <div
-            className={fdnBump ? 'animate-score-bump' : ''}
-            style={{
-              backgroundColor: '#0d9f67',
-              color: '#ffffff',
-              fontSize: 26,
-              fontWeight: 900,
-              padding: '4px 18px',
-              borderRadius: 12,
-              marginLeft: 8,
-              minWidth: 48,
-              textAlign: 'center'
-            }}
-          >
-            {state.fdnScore}
+
+          <div className="broadcast-center-divider">
+            <div className="broadcast-vs-text">VS</div>
+          </div>
+
+          <div className="broadcast-team-card broadcast-team-lauchang">
+            <div className={`broadcast-score-number ${lauchangBump ? 'animate-score-pop' : ''}`}>
+              {state.lauchangScore}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, textAlign: 'right' }}>
+              <div>
+                <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5, lineHeight: 1 }}>
+                  LAUCHANG
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.85, marginTop: 4, letterSpacing: 1 }}>
+                  TEAM LAUTASHE
+                </div>
+              </div>
+              <LauchangLogo size={58} />
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '0 8px' }}>
-          <span
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              color: '#ffffff',
-              fontSize: 12,
-              fontWeight: 900,
-              padding: '2px 10px',
-              borderRadius: 9999,
-              letterSpacing: 1
-            }}
-          >
-            VS
-          </span>
-          {state.activeGame && (
-            <span
-              style={{
-                fontSize: 11,
-                color: 'var(--accent-green)',
-                fontWeight: 800,
-                marginTop: 4,
-                textTransform: 'uppercase',
-                maxWidth: 120,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}
-            >
-              {state.activeGame}
-            </span>
-          )}
-        </div>
+        <div className="broadcast-bottom-bar">
+          <div className="broadcast-status-item">
+            <Trophy size={16} color="var(--accent-green)" />
+            <span>RONDA {playedCount + 1} / 5</span>
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div
-            className={lauchangBump ? 'animate-score-bump' : ''}
-            style={{
-              backgroundColor: '#e5a93c',
-              color: '#091210',
-              fontSize: 26,
-              fontWeight: 900,
-              padding: '4px 18px',
-              borderRadius: 12,
-              marginRight: 8,
-              minWidth: 48,
-              textAlign: 'center'
-            }}
-          >
-            {state.lauchangScore}
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 16, fontWeight: 900, letterSpacing: 0.5, color: '#ffffff' }}>
-              LAUCHANG
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>
-              TEAM LAUTASHE
+          <div className="broadcast-status-item">
+            <Gamepad2 size={16} color="var(--accent-gold)" />
+            <span>{state.activeGame ? `EN JUEGO: ${state.activeGame}` : 'ESPERANDO RULETA'}</span>
+            <div className="broadcast-status-dots" style={{ marginLeft: 8 }}>
+              {[0, 1, 2, 3, 4].map((idx) => (
+                <div
+                  key={idx}
+                  className={`broadcast-dot ${idx < playedCount ? 'broadcast-dot-active' : ''}`}
+                />
+              ))}
             </div>
           </div>
-          <LauchangLogo size={42} />
+
+          <div className="broadcast-status-item">
+            <Flame size={16} color="#d93838" />
+            <span>BEST OF 5</span>
+          </div>
         </div>
       </div>
     </div>

@@ -16,7 +16,9 @@ export const getInitialState = () => {
         isSpinning: false,
         winningIndex: null,
         showWinnerModal: false,
-        spinSeed: 0
+        spinSeed: 0,
+        currentRound: typeof parsed.currentRound === 'number' ? parsed.currentRound : 1,
+        maxRounds: typeof parsed.maxRounds === 'number' ? parsed.maxRounds : 5
       };
     }
   } catch (e) {}
@@ -30,7 +32,9 @@ export const getInitialState = () => {
     isSpinning: false,
     winningIndex: null,
     showWinnerModal: false,
-    spinSeed: 0
+    spinSeed: 0,
+    currentRound: 1,
+    maxRounds: 5
   };
 };
 

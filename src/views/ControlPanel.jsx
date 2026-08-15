@@ -76,7 +76,9 @@ export default function ControlPanel() {
         isSpinning: false,
         winningIndex: null,
         showWinnerModal: false,
-        spinSeed: 0
+        spinSeed: 0,
+        currentRound: 1,
+        maxRounds: 5
       };
       syncEngine.broadcast(newState);
     }
@@ -117,7 +119,7 @@ export default function ControlPanel() {
         <div className="card-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <FdnLogo size={44} />
+              <FdnLogo size={52} />
               <div>
                 <h2 style={{ fontSize: 20, fontWeight: 800 }}>TEAM FDN</h2>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Feeden</p>
@@ -147,7 +149,7 @@ export default function ControlPanel() {
         <div className="card-panel">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <LauchangLogo size={44} />
+              <LauchangLogo size={52} />
               <div>
                 <h2 style={{ fontSize: 20, fontWeight: 800 }}>TEAM LAUCHANG</h2>
                 <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lautashe</p>

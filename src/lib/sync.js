@@ -1,7 +1,7 @@
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
 const STORAGE_KEY = 'fdn_vs_lauchang_state_v4';
 const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v4';
-const FIREBASE_SYNC_URL = 'https://fdn-vs-lauchang-default-rtdb.firebaseio.com/room_fdn_lauchang.json';
+const SYNC_API_ENDPOINT = '/api/sync';
 
 const fixGameName = (name) => {
   if (!name) return name;
@@ -66,7 +66,6 @@ export class SyncEngine {
     this.channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
       ? new BroadcastChannel(CHANNEL_NAME)
       : null;
-    this.eventSource = null;
     this.pollInterval = null;
     this.lastStateHash = '';
 
@@ -105,7 +104,6 @@ export class SyncEngine {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', this.handleStorage);
-      this.initCloudSync();
       this.initCloudPolling();
     }
   }
@@ -130,43 +128,13 @@ export class SyncEngine {
     }
   }
 
-  initCloudSync() {
-    try {
-      if (this.eventSource) {
-        this.eventSource.close();
-      }
-      this.eventSource = new EventSource(FIREBASE_SYNC_URL);
-
-      const handleMessage = (e) => {
-        if (!e || !e.data) return;
-        try {
-          const parsed = JSON.parse(e.data);
-          const payload = parsed.data !== undefined ? parsed.data : parsed;
-          this.processCloudPayload(payload);
-        } catch (err) {}
-      };
-
-      this.eventSource.addEventListener('put', handleMessage);
-      this.eventSource.addEventListener('patch', handleMessage);
-      this.eventSource.addEventListener('message', handleMessage);
-      this.eventSource.onmessage = handleMessage;
-
-      this.eventSource.onerror = () => {
-        if (this.eventSource) {
-          this.eventSource.close();
-        }
-        setTimeout(() => this.initCloudSync(), 3000);
-      };
-    } catch (err) {}
-  }
-
   initCloudPolling() {
     const fetchLatest = () => {
       if (typeof fetch === 'undefined') return;
-      fetch(FIREBASE_SYNC_URL)
+      fetch(SYNC_API_ENDPOINT)
         .then((res) => res.json())
         .then((data) => {
-          if (data) {
+          if (data && data.remainingGames) {
             this.processCloudPayload(data);
           }
         })
@@ -174,7 +142,7 @@ export class SyncEngine {
     };
 
     fetchLatest();
-    this.pollInterval = setInterval(fetchLatest, 1200);
+    this.pollInterval = setInterval(fetchLatest, 600);
   }
 
   broadcast(state) {
@@ -193,8 +161,8 @@ export class SyncEngine {
     }
 
     if (typeof fetch !== 'undefined') {
-      fetch(FIREBASE_SYNC_URL, {
-        method: 'PUT',
+      fetch(SYNC_API_ENDPOINT, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanedState)
       }).catch(() => {});
@@ -208,9 +176,6 @@ export class SyncEngine {
   destroy() {
     if (this.channel) {
       this.channel.close();
-    }
-    if (this.eventSource) {
-      this.eventSource.close();
     }
     if (this.pollInterval) {
       clearInterval(this.pollInterval);

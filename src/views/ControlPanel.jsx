@@ -258,7 +258,7 @@ export default function ControlPanel() {
                   <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>TEAM FEEDEN</p>
                 </div>
               </div>
-              <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-green)' }}>
+              <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
                 {state.fdnScore}
               </div>
             </div>
@@ -268,7 +268,7 @@ export default function ControlPanel() {
                 style={{ flex: 1 }}
                 onClick={() => updateScore('fdn', 1)}
               >
-                <Plus size={18} /> Puntuar +1
+                <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"
@@ -298,7 +298,7 @@ export default function ControlPanel() {
                 style={{ flex: 1 }}
                 onClick={() => updateScore('lauchang', 1)}
               >
-                <Plus size={18} /> Puntuar +1
+                <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"

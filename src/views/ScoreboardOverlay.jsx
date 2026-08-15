@@ -135,7 +135,7 @@ export default function ScoreboardOverlay() {
 
         <div className="broadcast-3d-bottom-bar">
           <div className="broadcast-3d-game-badge">
-            <Gamepad2 size={18} color="var(--accent-green)" />
+            <Gamepad2 size={18} color="var(--accent-gold)" />
             <span>{state.activeGame ? `JUEGO EN CURSO: ${state.activeGame}` : 'ESPERANDO RULETA'}</span>
           </div>
         </div>

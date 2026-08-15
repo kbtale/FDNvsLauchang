@@ -67,6 +67,8 @@ export class SyncEngine {
       ? new BroadcastChannel(CHANNEL_NAME)
       : null;
     this.eventSource = null;
+    this.pollInterval = null;
+    this.lastStateHash = '';
 
     this.handleMessage = (event) => {
       if (event.data && this.onStateUpdate) {
@@ -104,6 +106,27 @@ export class SyncEngine {
     if (typeof window !== 'undefined') {
       window.addEventListener('storage', this.handleStorage);
       this.initCloudSync();
+      this.initCloudPolling();
+    }
+  }
+
+  processCloudPayload(payload) {
+    if (!payload || typeof payload !== 'object' || !payload.remainingGames) return;
+    const hash = JSON.stringify(payload);
+    if (hash === this.lastStateHash) return;
+    this.lastStateHash = hash;
+
+    const cleaned = {
+      ...payload,
+      remainingGames: (payload.remainingGames || []).map(fixGameName),
+      drawnGames: (payload.drawnGames || []).map(fixGameName),
+      activeGame: fixGameName(payload.activeGame)
+    };
+
+    saveState(cleaned);
+
+    if (this.onStateUpdate) {
+      this.onStateUpdate(cleaned);
     }
   }
 
@@ -113,32 +136,45 @@ export class SyncEngine {
         this.eventSource.close();
       }
       this.eventSource = new EventSource(FIREBASE_SYNC_URL);
-      this.eventSource.onmessage = (e) => {
-        if (!e.data) return;
+
+      const handleMessage = (e) => {
+        if (!e || !e.data) return;
         try {
-          const res = JSON.parse(e.data);
-          const payload = res.data || res;
-          if (payload && typeof payload === 'object' && payload.remainingGames) {
-            const cleaned = {
-              ...payload,
-              remainingGames: (payload.remainingGames || []).map(fixGameName),
-              drawnGames: (payload.drawnGames || []).map(fixGameName),
-              activeGame: fixGameName(payload.activeGame)
-            };
-            saveState(cleaned);
-            if (this.onStateUpdate) {
-              this.onStateUpdate(cleaned);
-            }
-          }
+          const parsed = JSON.parse(e.data);
+          const payload = parsed.data !== undefined ? parsed.data : parsed;
+          this.processCloudPayload(payload);
         } catch (err) {}
       };
+
+      this.eventSource.addEventListener('put', handleMessage);
+      this.eventSource.addEventListener('patch', handleMessage);
+      this.eventSource.addEventListener('message', handleMessage);
+      this.eventSource.onmessage = handleMessage;
+
       this.eventSource.onerror = () => {
         if (this.eventSource) {
           this.eventSource.close();
         }
-        setTimeout(() => this.initCloudSync(), 2000);
+        setTimeout(() => this.initCloudSync(), 3000);
       };
     } catch (err) {}
+  }
+
+  initCloudPolling() {
+    const fetchLatest = () => {
+      if (typeof fetch === 'undefined') return;
+      fetch(FIREBASE_SYNC_URL)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data) {
+            this.processCloudPayload(data);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchLatest();
+    this.pollInterval = setInterval(fetchLatest, 1200);
   }
 
   broadcast(state) {
@@ -149,6 +185,7 @@ export class SyncEngine {
       activeGame: fixGameName(state.activeGame)
     };
 
+    this.lastStateHash = JSON.stringify(cleanedState);
     saveState(cleanedState);
 
     if (this.channel) {
@@ -174,6 +211,9 @@ export class SyncEngine {
     }
     if (this.eventSource) {
       this.eventSource.close();
+    }
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', this.handleStorage);

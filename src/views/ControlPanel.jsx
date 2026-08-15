@@ -81,19 +81,41 @@ export default function ControlPanel() {
   };
 
   const triggerSpin = () => {
-    if (state.isSpinning || state.remainingGames.length === 0) return;
+    if (!syncEngine || state.isSpinning || !state.remainingGames || state.remainingGames.length === 0) return;
+
     const randomIndex = Math.floor(Math.random() * state.remainingGames.length);
-    const newState = {
+    const selectedGame = state.remainingGames[randomIndex];
+    const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
+    const newDrawn = [...state.drawnGames, selectedGame];
+
+    const spinSeed = Date.now();
+
+    const spinningState = {
       ...state,
       isSpinning: true,
       winningIndex: randomIndex,
       showWinnerModal: false,
-      spinSeed: Date.now()
+      spinSeed: spinSeed
     };
-    syncEngine.broadcast(newState);
+
+    syncEngine.broadcast(spinningState);
+
+    setTimeout(() => {
+      const finalState = {
+        ...spinningState,
+        isSpinning: false,
+        winningIndex: null,
+        activeGame: selectedGame,
+        remainingGames: newRemaining,
+        drawnGames: newDrawn,
+        showWinnerModal: true
+      };
+      syncEngine.broadcast(finalState);
+    }, 5300);
   };
 
   const updateScore = (team, delta) => {
+    if (!syncEngine) return;
     const key = team === 'fdn' ? 'fdnScore' : 'lauchangScore';
     const newScore = Math.max(0, state[key] + delta);
     const newState = {
@@ -104,6 +126,7 @@ export default function ControlPanel() {
   };
 
   const closeModal = () => {
+    if (!syncEngine) return;
     const newState = {
       ...state,
       showWinnerModal: false
@@ -112,6 +135,7 @@ export default function ControlPanel() {
   };
 
   const removeGameFromWheel = (gameToRemove) => {
+    if (!syncEngine) return;
     const updatedRemaining = state.remainingGames.filter((g) => g !== gameToRemove);
     const updatedDrawn = state.drawnGames.includes(gameToRemove) ? state.drawnGames : [...state.drawnGames, gameToRemove];
     const newState = {
@@ -123,6 +147,7 @@ export default function ControlPanel() {
   };
 
   const restoreGameToWheel = (gameToRestore) => {
+    if (!syncEngine) return;
     const updatedDrawn = state.drawnGames.filter((g) => g !== gameToRestore);
     const updatedRemaining = state.remainingGames.includes(gameToRestore) ? state.remainingGames : [...state.remainingGames, gameToRestore];
     const newState = {
@@ -135,7 +160,7 @@ export default function ControlPanel() {
 
   const handleAddCustomGame = (e) => {
     e.preventDefault();
-    if (!newGameInput.trim()) return;
+    if (!syncEngine || !newGameInput.trim()) return;
     const formatted = fixGameName(newGameInput.trim().toUpperCase());
     if (state.remainingGames.includes(formatted)) return;
 
@@ -148,6 +173,7 @@ export default function ControlPanel() {
   };
 
   const confirmResetAll = () => {
+    if (!syncEngine) return;
     const newState = {
       remainingGames: [...INITIAL_GAMES],
       drawnGames: [],

@@ -48,6 +48,7 @@ export default function RouletteOverlay() {
         remainingGames={state.remainingGames}
         isSpinning={state.isSpinning}
         winningIndex={state.winningIndex}
+        spinSeed={state.spinSeed}
         onSpinEnd={handleSpinEnd}
         showWinnerModal={state.showWinnerModal}
         activeGame={state.activeGame}

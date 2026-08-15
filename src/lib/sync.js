@@ -109,6 +109,9 @@ export class SyncEngine {
 
   initCloudSync() {
     try {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
       this.eventSource = new EventSource(FIREBASE_SYNC_URL);
       this.eventSource.onmessage = (e) => {
         if (!e.data) return;
@@ -128,6 +131,12 @@ export class SyncEngine {
             }
           }
         } catch (err) {}
+      };
+      this.eventSource.onerror = () => {
+        if (this.eventSource) {
+          this.eventSource.close();
+        }
+        setTimeout(() => this.initCloudSync(), 2000);
       };
     } catch (err) {}
   }

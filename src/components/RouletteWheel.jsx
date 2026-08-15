@@ -24,6 +24,7 @@ export default function RouletteWheel({
   remainingGames,
   isSpinning,
   winningIndex,
+  spinSeed,
   onSpinEnd,
   showWinnerModal,
   activeGame,
@@ -255,7 +256,7 @@ export default function RouletteWheel({
         if (animRef.current) cancelAnimationFrame(animRef.current);
       };
     }
-  }, [isSpinning, winningIndex]);
+  }, [isSpinning, winningIndex, spinSeed]);
 
   const displayWinner = fixGameName(activeGame);
 

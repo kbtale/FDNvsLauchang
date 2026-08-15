@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
-import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw } from 'lucide-react';
+import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle } from 'lucide-react';
 
 export default function ControlPanel() {
   const [state, setState] = useState(getInitialState);
   const [syncEngine, setSyncEngine] = useState(null);
   const [newGameInput, setNewGameInput] = useState('');
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
 
   useEffect(() => {
     const engine = new SyncEngine((newState) => {
@@ -84,25 +85,24 @@ export default function ControlPanel() {
     setNewGameInput('');
   };
 
-  const resetAll = () => {
-    if (window.confirm('¿Seguro que deseas reiniciar todo el evento, ruleta y marcadores?')) {
-      const newState = {
-        remainingGames: [...INITIAL_GAMES],
-        drawnGames: [],
-        fdnScore: 0,
-        lauchangScore: 0,
-        activeGame: null,
-        isSpinning: false,
-        winningIndex: null,
-        showWinnerModal: false,
-        spinSeed: 0
-      };
-      syncEngine.broadcast(newState);
-    }
+  const confirmResetAll = () => {
+    const newState = {
+      remainingGames: [...INITIAL_GAMES],
+      drawnGames: [],
+      fdnScore: 0,
+      lauchangScore: 0,
+      activeGame: null,
+      isSpinning: false,
+      winningIndex: null,
+      showWinnerModal: false,
+      spinSeed: 0
+    };
+    syncEngine.broadcast(newState);
+    setShowResetConfirmModal(false);
   };
 
   return (
-    <div className="admin-page-bg" style={{ padding: '32px 24px' }}>
+    <div className="admin-page-bg" style={{ padding: '32px 24px', position: 'relative' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
           <div>
@@ -306,12 +306,43 @@ export default function ControlPanel() {
               </div>
             </div>
 
-            <button className="btn-danger" style={{ width: '100%' }} onClick={resetAll}>
+            <button className="btn-danger" style={{ width: '100%' }} onClick={() => setShowResetConfirmModal(true)}>
               <RotateCcw size={16} /> Reiniciar Todo el Evento
             </button>
           </div>
         </div>
       </div>
+
+      {showResetConfirmModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(6, 10, 8, 0.88)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 20
+        }}>
+          <div className="card-panel" style={{ maxWidth: 440, width: '100%', textAlign: 'center', borderColor: 'var(--accent-red)' }}>
+            <div style={{ display: 'inline-flex', padding: 12, borderRadius: '50%', backgroundColor: 'rgba(201, 50, 50, 0.15)', color: 'var(--accent-red)', marginBottom: 16 }}>
+              <AlertTriangle size={32} />
+            </div>
+            <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 12 }}>¿Reiniciar Todo el Evento?</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
+              Esta acción restaurará todos los juegos a la ruleta y reiniciará los marcadores de FDN y Lauchang a 0.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowResetConfirmModal(false)}>
+                Cancelar
+              </button>
+              <button className="btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={confirmResetAll}>
+                Sí, Reiniciar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -141,26 +141,13 @@ export default function RouletteWheel({
       const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
       if (gameImg && gameImg.width > 0) {
         ctx.save();
-        ctx.rotate(startAngle + sliceAngle / 2);
-        ctx.globalAlpha = 0.9;
-
-        const sliceCenterDist = innerRadius * 0.55;
-        const boxW = innerRadius * 1.1;
-        const boxH = innerRadius * 0.95;
-        const imgAspect = gameImg.width / gameImg.height;
-
-        let drawW = boxW;
-        let drawH = boxW / imgAspect;
-        if (drawH < boxH) {
-          drawH = boxH;
-          drawW = boxH * imgAspect;
-        }
-
-        ctx.drawImage(gameImg, sliceCenterDist - drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.globalAlpha = 0.85;
+        const imgSize = innerRadius * 2.3;
+        ctx.drawImage(gameImg, -imgSize / 2, -imgSize / 2, imgSize, imgSize);
         ctx.globalAlpha = 1.0;
         ctx.restore();
 
-        ctx.fillStyle = 'rgba(8, 12, 10, 0.35)';
+        ctx.fillStyle = 'rgba(8, 12, 10, 0.3)';
         ctx.fill();
       }
 
@@ -182,7 +169,7 @@ export default function RouletteWheel({
       ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
       
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 6;
       ctx.lineJoin = 'round';
       ctx.strokeText(gameName, innerRadius - textOffset, 0);
 
@@ -278,9 +265,6 @@ export default function RouletteWheel({
       {showWinnerModal && displayWinner && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.5, color: '#d99b26', textTransform: 'uppercase', marginBottom: 6 }}>
-              SELECCIÓN EN VIVO
-            </div>
             <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
               {displayWinner}
             </h1>

@@ -92,7 +92,6 @@ export default function ControlPanel() {
     if (!syncEngine || state.isSpinning || !state.remainingGames || state.remainingGames.length === 0) return;
 
     const randomIndex = Math.floor(Math.random() * state.remainingGames.length);
-    const selectedGame = state.remainingGames[randomIndex];
     const spinSeed = Date.now();
 
     const spinningState = {
@@ -107,19 +106,22 @@ export default function ControlPanel() {
 
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     fallbackTimerRef.current = setTimeout(() => {
-      const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
-      const newDrawn = [...state.drawnGames, selectedGame];
-      const finalState = {
-        ...spinningState,
-        isSpinning: false,
-        winningIndex: null,
-        activeGame: selectedGame,
-        remainingGames: newRemaining,
-        drawnGames: newDrawn,
-        showWinnerModal: true
-      };
-      syncEngine.broadcast(finalState);
-    }, 7000);
+      if (state.remainingGames && state.remainingGames[randomIndex]) {
+        const selected = state.remainingGames[randomIndex];
+        const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
+        const newDrawn = state.drawnGames.includes(selected) ? state.drawnGames : [...state.drawnGames, selected];
+        const finalState = {
+          ...spinningState,
+          isSpinning: false,
+          winningIndex: null,
+          activeGame: selected,
+          remainingGames: newRemaining,
+          drawnGames: newDrawn,
+          showWinnerModal: true
+        };
+        syncEngine.broadcast(finalState);
+      }
+    }, 7500);
   };
 
   const updateScore = (team, delta) => {

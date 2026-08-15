@@ -1,4 +1,4 @@
-const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'CS', 'FALL GUYS'];
+const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER STRIKE', 'FALL GUYS'];
 const STORAGE_KEY = 'fdn_vs_lauchang_state_v1';
 const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v1';
 
@@ -7,18 +7,20 @@ export const getInitialState = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(g => g === 'CS' ? 'COUNTER STRIKE' : g);
+      let drawn = (parsed.drawnGames || []).map(g => g === 'CS' ? 'COUNTER STRIKE' : g);
+      let active = parsed.activeGame === 'CS' ? 'COUNTER STRIKE' : parsed.activeGame;
+
       return {
-        remainingGames: parsed.remainingGames || INITIAL_GAMES,
-        drawnGames: parsed.drawnGames || [],
+        remainingGames: remaining,
+        drawnGames: drawn,
         fdnScore: typeof parsed.fdnScore === 'number' ? parsed.fdnScore : 0,
         lauchangScore: typeof parsed.lauchangScore === 'number' ? parsed.lauchangScore : 0,
-        activeGame: parsed.activeGame || null,
+        activeGame: active || null,
         isSpinning: false,
         winningIndex: null,
         showWinnerModal: false,
-        spinSeed: 0,
-        currentRound: typeof parsed.currentRound === 'number' ? parsed.currentRound : 1,
-        maxRounds: typeof parsed.maxRounds === 'number' ? parsed.maxRounds : 5
+        spinSeed: 0
       };
     }
   } catch (e) {}
@@ -32,9 +34,7 @@ export const getInitialState = () => {
     isSpinning: false,
     winningIndex: null,
     showWinnerModal: false,
-    spinSeed: 0,
-    currentRound: 1,
-    maxRounds: 5
+    spinSeed: 0
   };
 };
 

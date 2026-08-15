@@ -9,6 +9,14 @@ const SLICE_COLORS = [
   '#165A6E'
 ];
 
+const GAME_IMAGE_MAP = {
+  'FORTNITE': '/games/fortnite.png',
+  'CLASH ROYALE': '/games/clash_royale.png',
+  'COPA ROBLOX': '/games/copa_roblox.png',
+  'COUNTER STRIKE': '/games/counter_strike.png',
+  'FALL GUYS': '/games/fall_guys.png'
+};
+
 export default function RouletteWheel({
   remainingGames,
   isSpinning,
@@ -22,8 +30,28 @@ export default function RouletteWheel({
   const canvasRef = useRef(null);
   const [rotation, setRotation] = useState(0);
   const [isTicking, setIsTicking] = useState(false);
+  const [activeLogoIndex, setActiveLogoIndex] = useState(0);
+  const [loadedImages, setLoadedImages] = useState({});
   const animRef = useRef(null);
   const prevSliceIndexRef = useRef(-1);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveLogoIndex((prev) => (prev === 0 ? 1 : 0));
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const images = {};
+    Object.entries(GAME_IMAGE_MAP).forEach(([game, src]) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        setLoadedImages((prev) => ({ ...prev, [game]: img }));
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -48,7 +76,7 @@ export default function RouletteWheel({
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
+      ctx.font = '900 20px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('¡TODOS LOS JUEGOS JUGADOS!', centerX, centerY);
@@ -85,6 +113,7 @@ export default function RouletteWheel({
     ctx.rotate((rotation * Math.PI) / 180);
 
     for (let i = 0; i < numSlices; i++) {
+      const gameName = remainingGames[i];
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
 
@@ -101,30 +130,26 @@ export default function RouletteWheel({
 
       ctx.save();
       ctx.rotate(startAngle + sliceAngle / 2);
+
+      const gameImg = loadedImages[gameName];
+      if (gameImg) {
+        ctx.drawImage(gameImg, innerRadius - 90, -22, 44, 44);
+      }
+
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#000000';
+      ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
+      ctx.fillText(gameName, innerRadius - (gameImg ? 95 : 20) + 2, 2);
+
       ctx.fillStyle = '#ffffff';
       ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
-      ctx.fillText(remainingGames[i], innerRadius - 20, 0);
+      ctx.fillText(gameName, innerRadius - (gameImg ? 95 : 20), 0);
       ctx.restore();
     }
 
     ctx.restore();
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 42, 0, Math.PI * 2);
-    ctx.fillStyle = '#0a0f0d';
-    ctx.fill();
-    ctx.strokeStyle = '#0d9f67';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 12px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('FDN vs LAUCHANG', centerX, centerY);
-  }, [remainingGames, rotation, size]);
+  }, [remainingGames, rotation, size, loadedImages]);
 
   useEffect(() => {
     if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0) {
@@ -182,19 +207,31 @@ export default function RouletteWheel({
   return (
     <div className="roulette-wrapper">
       <div className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`} />
+      
       <canvas
         ref={canvasRef}
         width={size}
         height={size}
         style={{ width: `${size}px`, height: `${size}px` }}
       />
+
+      <div className="roulette-center-hub">
+        <div className={`hub-logo-container ${activeLogoIndex === 1 ? 'hub-logo-flip' : ''}`}>
+          <img
+            src={activeLogoIndex === 0 ? '/LOGO FDN.png' : '/LOGO LAUTASHE.jpeg'}
+            alt="Center Hub Logo"
+            className="hub-logo-img"
+          />
+        </div>
+      </div>
+
       {showWinnerModal && activeGame && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
             <div className="pill-badge badge-green" style={{ marginBottom: 16 }}>
               ¡JUEGO SELECCIONADO!
             </div>
-            <h1 style={{ fontSize: 40, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+            <h1 style={{ fontSize: 38, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, textShadow: '0 4px 0 rgba(0,0,0,0.3)' }}>
               {activeGame}
             </h1>
             <p style={{ fontSize: 15, opacity: 0.8, marginBottom: 28, fontWeight: 600 }}>

@@ -45,7 +45,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   background: transparent !important;
 }
 
@@ -202,15 +202,17 @@ html, body {
   transform: translate(-50%, -50%);
   z-index: 100;
   pointer-events: auto;
+  width: 90%;
+  max-width: 420px;
 }
 
 .winner-card {
   background-color: #0c1411;
   color: #ffffff;
   border-radius: 16px;
-  padding: 28px 36px;
+  padding: 24px 28px;
   text-align: center;
-  min-width: 360px;
+  width: 100%;
   border: 3px solid #d99b26;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85);
   position: relative;
@@ -233,6 +235,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  max-width: 100%;
 }
 
 .wheel-pointer {
@@ -293,7 +296,7 @@ html, body {
 }
 
 .broadcast-3d-scoreboard {
-  width: 100%;
+  width: 95vw;
   max-width: 860px;
   background-color: #0b1411;
   border: 3px solid #233a33;
@@ -305,7 +308,7 @@ html, body {
 
 .broadcast-3d-main-bar {
   display: grid;
-  grid-template-columns: 1fr 70px 1fr;
+  grid-template-columns: 1fr 60px 1fr;
   height: 105px;
   background-color: #070e0c;
   position: relative;
@@ -315,7 +318,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 24px;
   height: 100%;
   position: relative;
 }
@@ -333,12 +336,12 @@ html, body {
 }
 
 .broadcast-3d-score-number {
-  font-size: 64px;
+  font-size: 58px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: -1px;
   font-variant-numeric: tabular-nums;
-  min-width: 75px;
+  min-width: 65px;
   text-align: center;
 }
 
@@ -352,7 +355,7 @@ html, body {
 }
 
 .broadcast-3d-vs {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   color: #d99b26;
   letter-spacing: 1.5px;
@@ -361,7 +364,7 @@ html, body {
 .broadcast-3d-bottom-bar {
   background-color: #0d1e19;
   border-top: 2px solid #1c362e;
-  padding: 10px 32px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -374,10 +377,10 @@ html, body {
   gap: 10px;
   background-color: #060c0a;
   color: #ffffff;
-  padding: 6px 20px;
+  padding: 6px 16px;
   border-radius: 9999px;
   border: 1px solid #1a3c31;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
   letter-spacing: 1px;
   text-transform: uppercase;
@@ -396,5 +399,68 @@ html, body {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+.responsive-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.responsive-grid-main {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .responsive-grid-2,
+  .responsive-grid-main {
+    grid-template-columns: 1fr !important;
+  }
+
+  .broadcast-3d-main-bar {
+    height: 80px;
+    grid-template-columns: 1fr 44px 1fr;
+  }
+
+  .broadcast-3d-team-card {
+    padding: 0 12px;
+  }
+
+  .broadcast-3d-score-number {
+    font-size: 40px;
+    min-width: 44px;
+  }
+
+  .roulette-center-hub {
+    width: 72px;
+    height: 72px;
+  }
+
+  .hub-logo-img {
+    width: 56px;
+    height: 56px;
+  }
+}
+
+@media (max-width: 480px) {
+  .broadcast-3d-scoreboard {
+    width: 98vw;
+    border-radius: 8px;
+  }
+
+  .broadcast-3d-main-bar {
+    height: 70px;
+  }
+
+  .broadcast-3d-score-number {
+    font-size: 32px;
+    min-width: 36px;
+  }
+
+  .card-panel {
+    padding: 16px;
   }
 }

@@ -102,18 +102,18 @@ export default function ControlPanel() {
   };
 
   return (
-    <div className="admin-page-bg" style={{ padding: '32px 24px', position: 'relative' }}>
+    <div className="admin-page-bg" style={{ padding: '32px 16px', position: 'relative' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <div className="pill-badge badge-dark" style={{ marginBottom: 8 }}>
               CONTROL EN VIVO
             </div>
-            <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>
               FDN VS LAUCHANG : DASHBOARD STREAM
             </h1>
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <a
               href="/roulette"
               target="_blank"
@@ -133,7 +133,7 @@ export default function ControlPanel() {
           </div>
         </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 32 }}>
+        <div className="responsive-grid-2" style={{ marginBottom: 32 }}>
           <div className="card-panel">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -153,7 +153,7 @@ export default function ControlPanel() {
                 style={{ flex: 1 }}
                 onClick={() => updateScore('fdn', 1)}
               >
-                <Plus size={18} /> Puntear +1
+                <Plus size={18} /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"
@@ -183,7 +183,7 @@ export default function ControlPanel() {
                 style={{ flex: 1 }}
                 onClick={() => updateScore('lauchang', 1)}
               >
-                <Plus size={18} /> Puntear +1
+                <Plus size={18} /> Puntuar +1
               </button>
               <button
                 className="btn-secondary"
@@ -195,7 +195,7 @@ export default function ControlPanel() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 24 }}>
+        <div className="responsive-grid-main">
           <div className="card-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -10,7 +10,7 @@ export default function Hub() {
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 20, marginBottom: 20 }}>
             <FdnLogo size={70} />
-            <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent-green)' }}>VS</span>
+            <span style={{ fontSize: 24, fontWeight: 900, color: 'var(--accent-gold)' }}>VS</span>
             <LauchangLogo size={70} />
           </div>
           <h1 style={{ fontSize: 36, fontWeight: 900, letterSpacing: -1, marginBottom: 8 }}>
@@ -24,21 +24,21 @@ export default function Hub() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
           <a
             href="/control"
-            className="card-panel-active"
+            className="card-panel"
             style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#ffffff' }}
           >
             <div>
               <div className="pill-badge badge-dark" style={{ marginBottom: 8 }}>
-                RECOMENDADO PARA EL STREAMER
+                STREAMER CONTROL
               </div>
               <h2 style={{ fontSize: 22, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Sliders size={24} /> PANEL DE CONTROL PRINCIPAL
+                <Sliders size={24} color="var(--accent-gold)" /> PANEL DE CONTROL PRINCIPAL
               </h2>
-              <p style={{ opacity: 0.9, marginTop: 4, fontSize: 14 }}>
+              <p style={{ opacity: 0.85, marginTop: 4, fontSize: 14, color: 'var(--text-muted)' }}>
                 Gira la ruleta, controla los puntos de FDN y Lauchang y gestiona el evento en vivo.
               </p>
             </div>
-            <ExternalLink size={24} />
+            <ExternalLink size={24} color="var(--accent-gold)" />
           </a>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -49,16 +49,16 @@ export default function Hub() {
               className="card-panel"
               style={{ textDecoration: 'none', color: '#ffffff' }}
             >
-              <div className="pill-badge badge-green" style={{ marginBottom: 12 }}>
+              <div className="pill-badge badge-dark" style={{ marginBottom: 12 }}>
                 OBS SOURCE
               </div>
               <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Dices size={20} color="var(--accent-green)" /> Overlay Ruleta
+                <Dices size={20} color="var(--accent-gold)" /> Overlay Ruleta
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
                 Añade esta URL a tu navegador de OBS para mostrar la ruleta animada entre cámaras.
               </p>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-green)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-gold)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 Abrir URL <ExternalLink size={14} />
               </span>
             </a>
@@ -70,16 +70,16 @@ export default function Hub() {
               className="card-panel"
               style={{ textDecoration: 'none', color: '#ffffff' }}
             >
-              <div className="pill-badge badge-green" style={{ marginBottom: 12 }}>
+              <div className="pill-badge badge-dark" style={{ marginBottom: 12 }}>
                 OBS SOURCE
               </div>
               <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Trophy size={20} color="var(--accent-green)" /> Overlay Marcador
+                <Trophy size={20} color="var(--accent-gold)" /> Overlay Marcador
               </h3>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
                 Marcador 3D para OBS con fondo 100% transparente.
               </p>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-green)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-gold)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 Abrir URL <ExternalLink size={14} />
               </span>
             </a>

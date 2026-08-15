@@ -106,11 +106,11 @@ export default function ControlPanel() {
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
           <div>
-            <div className="pill-badge badge-green" style={{ marginBottom: 8 }}>
+            <div className="pill-badge badge-dark" style={{ marginBottom: 8 }}>
               CONTROL EN VIVO
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5 }}>
-              FDN VS LAUCHANG — DASHBOARD STREAM
+              FDN VS LAUCHANG : DASHBOARD STREAM
             </h1>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
@@ -149,7 +149,7 @@ export default function ControlPanel() {
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button
-                className="btn-primary"
+                className="btn-secondary"
                 style={{ flex: 1 }}
                 onClick={() => updateScore('fdn', 1)}
               >
@@ -179,8 +179,8 @@ export default function ControlPanel() {
             </div>
             <div style={{ display: 'flex', gap: 12 }}>
               <button
-                className="btn-primary"
-                style={{ flex: 1, backgroundColor: 'var(--accent-gold)' }}
+                className="btn-secondary"
+                style={{ flex: 1 }}
                 onClick={() => updateScore('lauchang', 1)}
               >
                 <Plus size={18} /> Puntear +1
@@ -199,7 +199,7 @@ export default function ControlPanel() {
           <div className="card-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Dices size={22} color="var(--accent-green)" /> Acciones de Ruleta
+                <Dices size={22} color="var(--accent-gold)" /> Acciones de Ruleta
               </h2>
               <span className="pill-badge badge-dark">
                 Restantes: {state.remainingGames.length}
@@ -228,7 +228,7 @@ export default function ControlPanel() {
                     Ocultar Modal
                   </button>
                 ) : (
-                  <span className="pill-badge badge-green">En juego</span>
+                  <span className="pill-badge badge-dark">En juego</span>
                 )}
               </div>
             )}
@@ -236,7 +236,7 @@ export default function ControlPanel() {
 
           <div className="card-panel">
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Trophy size={22} color="var(--accent-green)" /> Gestión de Juegos
+              <Trophy size={22} color="var(--accent-gold)" /> Gestión de Juegos
             </h2>
 
             <form onSubmit={handleAddCustomGame} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -270,10 +270,10 @@ export default function ControlPanel() {
                 {state.remainingGames.map((game) => (
                   <button
                     key={game}
-                    className="pill-badge badge-green"
+                    className="pill-badge badge-dark"
                     onClick={() => removeGameFromWheel(game)}
                     title="Haz clic para quitar de la ruleta"
-                    style={{ cursor: 'pointer', border: 'none' }}
+                    style={{ cursor: 'pointer' }}
                   >
                     {game} <Trash2 size={12} style={{ opacity: 0.8 }} />
                   </button>

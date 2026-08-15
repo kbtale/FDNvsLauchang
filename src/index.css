@@ -1,20 +1,20 @@
 :root {
-  --bg-dark: #091210;
-  --panel-bg: #0d2620;
-  --panel-surface: #12332b;
+  --bg-dark: #0a0f0d;
+  --panel-bg: #121917;
+  --panel-surface: #192320;
   --accent-green: #0d9f67;
   --accent-green-hover: #0b8a59;
-  --accent-red: #d93838;
-  --accent-red-hover: #ba2b2b;
-  --accent-gold: #e5a93c;
+  --accent-red: #c93232;
+  --accent-red-hover: #aa2626;
+  --accent-gold: #d99b26;
   --text-main: #ffffff;
-  --text-muted: #8ea89f;
-  --text-dark: #091210;
-  --border-subtle: #194439;
-  --border-highlight: #0d9f67;
+  --text-muted: #849690;
+  --text-dark: #0a0f0d;
+  --border-subtle: #1e2b27;
+  --border-highlight: #283a35;
   --radius-sm: 8px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
   --radius-full: 9999px;
   --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
@@ -57,7 +57,8 @@ html, body {
 }
 
 .card-panel-active {
-  background-color: var(--accent-green);
+  background-color: var(--panel-surface);
+  border: 1px solid var(--accent-green);
   color: var(--text-main);
   border-radius: var(--radius-lg);
   padding: 24px;
@@ -107,7 +108,7 @@ html, body {
 }
 
 .btn-secondary:hover {
-  background-color: #1a4237;
+  background-color: #222f2b;
 }
 
 .btn-white {
@@ -155,8 +156,9 @@ html, body {
 }
 
 .pill-badge {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--panel-surface);
   color: var(--text-main);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   padding: 6px 14px;
   font-size: 13px;
@@ -169,6 +171,7 @@ html, body {
 .badge-green {
   background-color: var(--accent-green);
   color: #ffffff;
+  border: none;
 }
 
 .badge-dark {
@@ -195,7 +198,7 @@ html, body {
 .winner-overlay-modal {
   position: fixed;
   inset: 0;
-  background-color: rgba(9, 18, 16, 0.85);
+  background-color: rgba(6, 10, 8, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -204,15 +207,14 @@ html, body {
 }
 
 .winner-card {
-  background-color: var(--accent-green);
+  background-color: var(--panel-bg);
   color: #ffffff;
   border-radius: var(--radius-lg);
-  padding: 48px;
+  padding: 40px;
   text-align: center;
-  max-width: 540px;
+  max-width: 480px;
   width: 100%;
-  border: 2px solid #1fe396;
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.2), inset 0 -3px 0 rgba(0,0,0,0.2), 0 10px 24px rgba(0,0,0,0.4);
+  border: 2px solid var(--accent-green);
 }
 
 .roulette-wrapper {
@@ -226,14 +228,20 @@ html, body {
 .wheel-pointer {
   width: 0;
   height: 0;
-  border-left: 18px solid transparent;
-  border-right: 18px solid transparent;
-  border-top: 32px solid #ffffff;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-top: 36px solid #d99b26;
   position: absolute;
-  top: -12px;
+  top: -14px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 20;
+  z-index: 25;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: transform 0.05s ease;
+}
+
+.wheel-pointer-tick {
+  transform: translateX(-50%) rotate(-12deg);
 }
 
 .broadcast-3d-scoreboard {
@@ -242,9 +250,6 @@ html, body {
   background-color: #0b1411;
   border: 3px solid #233a33;
   border-radius: 14px;
-  box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   overflow: hidden;
   font-family: var(--font-family);
   position: relative;
@@ -270,14 +275,12 @@ html, body {
 .broadcast-3d-team-fdn {
   background-color: #0d9f67;
   color: #ffffff;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.2), inset 0 -3px 0 rgba(0, 0, 0, 0.2);
   border-right: 2px solid #08110e;
 }
 
 .broadcast-3d-team-lauchang {
-  background-color: #e5a93c;
+  background-color: #d99b26;
   color: #091210;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25), inset 0 -3px 0 rgba(0, 0, 0, 0.2);
   border-left: 2px solid #08110e;
 }
 
@@ -289,7 +292,6 @@ html, body {
   font-variant-numeric: tabular-nums;
   min-width: 75px;
   text-align: center;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
 }
 
 .broadcast-3d-divider {
@@ -343,7 +345,6 @@ html, body {
   }
   50% {
     transform: scale(1.45);
-    filter: brightness(1.3);
   }
   100% {
     transform: scale(1);

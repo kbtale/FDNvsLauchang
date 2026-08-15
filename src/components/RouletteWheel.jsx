@@ -38,6 +38,7 @@ export default function RouletteWheel({
   const [loadedImages, setLoadedImages] = useState({});
   const animRef = useRef(null);
   const prevSliceIndexRef = useRef(-1);
+  const activeSpinSeedRef = useRef(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -206,7 +207,12 @@ export default function RouletteWheel({
   }, [remainingGames, rotation, size, loadedImages]);
 
   useEffect(() => {
-    if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0) {
+    if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0 && spinSeed) {
+      if (activeSpinSeedRef.current === spinSeed) {
+        return;
+      }
+      activeSpinSeedRef.current = spinSeed;
+
       const numSlices = remainingGames.length;
       const sliceDeg = 360 / numSlices;
       const targetSliceCenter = winningIndex * sliceDeg + sliceDeg / 2;
@@ -250,11 +256,8 @@ export default function RouletteWheel({
         }
       };
 
+      if (animRef.current) cancelAnimationFrame(animRef.current);
       animRef.current = requestAnimationFrame(animate);
-
-      return () => {
-        if (animRef.current) cancelAnimationFrame(animRef.current);
-      };
     }
   }, [isSpinning, winningIndex, spinSeed]);
 

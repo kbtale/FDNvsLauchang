@@ -108,9 +108,15 @@ export class SyncEngine {
     }
   }
 
+  computeHash(payload) {
+    if (!payload || typeof payload !== 'object') return '';
+    const { updatedAt, ...coreState } = payload;
+    return JSON.stringify(coreState);
+  }
+
   processCloudPayload(payload) {
     if (!payload || typeof payload !== 'object' || !payload.remainingGames) return;
-    const hash = JSON.stringify(payload);
+    const hash = this.computeHash(payload);
     if (hash === this.lastStateHash) return;
     this.lastStateHash = hash;
 
@@ -153,7 +159,7 @@ export class SyncEngine {
       activeGame: fixGameName(state.activeGame)
     };
 
-    this.lastStateHash = JSON.stringify(cleanedState);
+    this.lastStateHash = this.computeHash(cleanedState);
     saveState(cleanedState);
 
     if (this.channel) {

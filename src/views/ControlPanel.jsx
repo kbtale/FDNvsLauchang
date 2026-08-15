@@ -2,21 +2,94 @@ import React, { useState, useEffect } from 'react';
 import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
-import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle } from 'lucide-react';
+import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle, Lock, LogOut, KeyRound } from 'lucide-react';
+
+const SESSION_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
+const DEFAULT_FALLBACK_PASSWORD = 'FDNvsLauchang2026!';
 
 export default function ControlPanel() {
   const [state, setState] = useState(getInitialState);
   const [syncEngine, setSyncEngine] = useState(null);
   const [newGameInput, setNewGameInput] = useState('');
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
-    const engine = new SyncEngine((newState) => {
-      setState(newState);
-    });
-    setSyncEngine(engine);
-    return () => engine.destroy();
+    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    if (token) {
+      fetch('/api/verify', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.valid) {
+            setIsAuthenticated(true);
+          } else if (token.includes('fdn_lauchang_admin:')) {
+            setIsAuthenticated(true);
+          } else {
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+          }
+        })
+        .catch(() => {
+          if (token.includes('fdn_lauchang_admin:')) {
+            setIsAuthenticated(true);
+          }
+        });
+    }
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      const engine = new SyncEngine((newState) => {
+        setState(newState);
+      });
+      setSyncEngine(engine);
+      return () => engine.destroy();
+    }
+  }, [isAuthenticated]);
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    if (!loginPassword) return;
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: loginPassword })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success && data.token) {
+        sessionStorage.setItem(SESSION_TOKEN_KEY, data.token);
+        setIsAuthenticated(true);
+        setIsLoggingIn(false);
+        return;
+      }
+    } catch (err) {}
+
+    if (loginPassword === DEFAULT_FALLBACK_PASSWORD) {
+      const localToken = `fdn_lauchang_admin:${Date.now()}:${DEFAULT_FALLBACK_PASSWORD}`;
+      sessionStorage.setItem(SESSION_TOKEN_KEY, localToken);
+      setIsAuthenticated(true);
+      setIsLoggingIn(false);
+      return;
+    }
+
+    setLoginError('Contraseña de administrador incorrecta.');
+    setIsLoggingIn(false);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    setIsAuthenticated(false);
+    setLoginPassword('');
+  };
 
   const triggerSpin = () => {
     if (state.isSpinning || state.remainingGames.length === 0) return;
@@ -101,6 +174,60 @@ export default function ControlPanel() {
     setShowResetConfirmModal(false);
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="admin-page-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div className="card-panel" style={{ maxWidth: 420, width: '100%', textAlign: 'center', borderColor: 'var(--border-highlight)' }}>
+          <div style={{ display: 'inline-flex', padding: 14, borderRadius: '50%', backgroundColor: 'var(--panel-surface)', color: 'var(--accent-gold)', marginBottom: 20 }}>
+            <Lock size={32} />
+          </div>
+
+          <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Panel de Control Protegido</h2>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
+            Ingrese la contraseña del administrador del stream para acceder.
+          </p>
+
+          <form onSubmit={handleLoginSubmit}>
+            <div style={{ marginBottom: 16, position: 'relative' }}>
+              <input
+                type="password"
+                placeholder="Contraseña de administrador..."
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px 12px 42px',
+                  borderRadius: 9999,
+                  backgroundColor: 'var(--panel-surface)',
+                  border: '1px solid var(--border-subtle)',
+                  color: '#ffffff',
+                  outline: 'none',
+                  fontSize: 14,
+                  fontWeight: 600
+                }}
+              />
+              <KeyRound size={18} color="var(--text-muted)" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
+            </div>
+
+            {loginError && (
+              <div style={{ color: 'var(--accent-red)', fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
+                {loginError}
+              </div>
+            )}
+
+            <button type="submit" className="btn-white" style={{ width: '100%', padding: '12px' }} disabled={isLoggingIn}>
+              {isLoggingIn ? 'Verificando...' : 'Iniciar Sesión'}
+            </button>
+          </form>
+
+          <div style={{ marginTop: 24, fontSize: 11, color: 'var(--text-muted)' }}>
+            Contraseña por defecto: <code style={{ backgroundColor: 'var(--panel-surface)', padding: '2px 6px', borderRadius: 4 }}>FDNvsLauchang2026!</code>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-page-bg" style={{ padding: '32px 16px', position: 'relative' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -109,7 +236,7 @@ export default function ControlPanel() {
             <div className="pill-badge badge-dark" style={{ marginBottom: 8 }}>
               CONTROL EN VIVO
             </div>
-            <h1 style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5 }}>
               FDN VS LAUCHANG : DASHBOARD STREAM
             </h1>
           </div>
@@ -130,6 +257,9 @@ export default function ControlPanel() {
             >
               Overlay Marcador <ExternalLink size={16} />
             </a>
+            <button className="btn-danger" onClick={handleLogout} style={{ padding: '8px 16px' }}>
+              <LogOut size={16} /> Salir
+            </button>
           </div>
         </header>
 

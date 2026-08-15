@@ -14,25 +14,6 @@ export default function RouletteOverlay() {
     return () => engine.destroy();
   }, []);
 
-  const handleSpinEnd = () => {
-    if (!syncEngine || state.winningIndex === null || !state.remainingGames || !state.remainingGames[state.winningIndex]) return;
-    
-    const selected = state.remainingGames[state.winningIndex];
-    const newRemaining = state.remainingGames.filter((_, idx) => idx !== state.winningIndex);
-    const newDrawn = state.drawnGames.includes(selected) ? state.drawnGames : [...state.drawnGames, selected];
-
-    const newState = {
-      ...state,
-      isSpinning: false,
-      winningIndex: null,
-      activeGame: selected,
-      remainingGames: newRemaining,
-      drawnGames: newDrawn,
-      showWinnerModal: true
-    };
-    syncEngine.broadcast(newState);
-  };
-
   const handleCloseModal = () => {
     if (!syncEngine) return;
     const newState = {
@@ -49,7 +30,6 @@ export default function RouletteOverlay() {
         isSpinning={state.isSpinning}
         winningIndex={state.winningIndex}
         spinSeed={state.spinSeed}
-        onSpinEnd={handleSpinEnd}
         showWinnerModal={state.showWinnerModal}
         activeGame={state.activeGame}
         onCloseModal={handleCloseModal}

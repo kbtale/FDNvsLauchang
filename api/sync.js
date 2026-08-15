@@ -6,7 +6,10 @@ let memoryFallbackState = null;
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -18,7 +21,7 @@ export default async function handler(req, res) {
       if (payload && typeof payload === 'object') {
         const stateToSave = {
           ...payload,
-          updatedAt: Date.now()
+          updatedAt: payload.updatedAt || Date.now()
         };
 
         if (REDIS_URL && REDIS_TOKEN) {
@@ -29,15 +32,18 @@ export default async function handler(req, res) {
                 Authorization: `Bearer ${REDIS_TOKEN}`,
                 'Content-Type': 'application/json'
               },
-              body: JSON.stringify(JSON.stringify(stateToSave))
+              body: JSON.stringify(stateToSave)
             });
-          } catch (e) {}
+          } catch (e) {
+            console.error('Redis SET error:', e);
+          }
         }
         memoryFallbackState = stateToSave;
+        return res.status(200).json({ success: true, state: stateToSave });
       }
-      return res.status(200).json({ success: true, state: memoryFallbackState });
-    } catch (err) {
       return res.status(400).json({ error: 'Invalid state payload' });
+    } catch (err) {
+      return res.status(400).json({ error: 'Invalid request body' });
     }
   }
 
@@ -49,14 +55,25 @@ export default async function handler(req, res) {
         }
       });
       const redisData = await redisRes.json();
-      if (redisData && redisData.result) {
-        const parsed = typeof redisData.result === 'string' ? JSON.parse(redisData.result) : redisData.result;
+      if (redisData && redisData.result !== undefined && redisData.result !== null) {
+        let parsed = redisData.result;
+        while (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch (e) {
+            break;
+          }
+        }
         if (parsed && typeof parsed === 'object') {
+          memoryFallbackState = parsed;
           return res.status(200).json(parsed);
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Redis GET error:', e);
+    }
   }
 
   return res.status(200).json(memoryFallbackState || {});
 }
+

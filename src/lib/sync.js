@@ -1,6 +1,6 @@
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
-const STORAGE_KEY = 'fdn_vs_lauchang_state_v4';
-const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v4';
+const STORAGE_KEY = 'fdn_vs_lauchang_state_v5';
+const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v5';
 const SYNC_API_ENDPOINT = '/api/sync';
 
 const fixGameName = (name) => {
@@ -27,10 +27,12 @@ export const getInitialState = () => {
         fdnScore: typeof parsed.fdnScore === 'number' ? parsed.fdnScore : 0,
         lauchangScore: typeof parsed.lauchangScore === 'number' ? parsed.lauchangScore : 0,
         activeGame: active || null,
-        isSpinning: false,
-        winningIndex: null,
-        showWinnerModal: false,
-        spinSeed: 0
+        isSpinning: !!parsed.isSpinning,
+        winningIndex: typeof parsed.winningIndex === 'number' ? parsed.winningIndex : null,
+        showWinnerModal: !!parsed.showWinnerModal,
+        spinSeed: parsed.spinSeed || 0,
+        spinInitiator: parsed.spinInitiator || null,
+        updatedAt: parsed.updatedAt || 0
       };
     }
   } catch (e) {}
@@ -44,7 +46,9 @@ export const getInitialState = () => {
     isSpinning: false,
     winningIndex: null,
     showWinnerModal: false,
-    spinSeed: 0
+    spinSeed: 0,
+    spinInitiator: null,
+    updatedAt: 0
   };
 };
 
@@ -67,17 +71,15 @@ export class SyncEngine {
       ? new BroadcastChannel(CHANNEL_NAME)
       : null;
     this.pollInterval = null;
-    this.lastStateHash = '';
+    this.clientId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+    
+    const initial = getInitialState();
+    this.lastUpdatedAt = initial.updatedAt || 0;
+    this.lastStateHash = this.computeHash(initial);
 
     this.handleMessage = (event) => {
-      if (event.data && this.onStateUpdate) {
-        const cleaned = {
-          ...event.data,
-          remainingGames: (event.data.remainingGames || []).map(fixGameName),
-          drawnGames: (event.data.drawnGames || []).map(fixGameName),
-          activeGame: fixGameName(event.data.activeGame)
-        };
-        this.onStateUpdate(cleaned);
+      if (event.data && typeof event.data === 'object' && event.data.remainingGames) {
+        this.processIncomingPayload(event.data, false);
       }
     };
 
@@ -89,14 +91,8 @@ export class SyncEngine {
       if (event.key === STORAGE_KEY && event.newValue) {
         try {
           const newState = JSON.parse(event.newValue);
-          const cleaned = {
-            ...newState,
-            remainingGames: (newState.remainingGames || []).map(fixGameName),
-            drawnGames: (newState.drawnGames || []).map(fixGameName),
-            activeGame: fixGameName(newState.activeGame)
-          };
-          if (this.onStateUpdate) {
-            this.onStateUpdate(cleaned);
+          if (newState && newState.remainingGames) {
+            this.processIncomingPayload(newState, false);
           }
         } catch (e) {}
       }
@@ -114,20 +110,35 @@ export class SyncEngine {
     return JSON.stringify(coreState);
   }
 
-  processCloudPayload(payload) {
+  processIncomingPayload(payload, shouldPersist = true) {
     if (!payload || typeof payload !== 'object' || !payload.remainingGames) return;
+
+    const incomingUpdatedAt = payload.updatedAt || 0;
+    
+    // Strict timestamp check: Ignore stale states received from lagging serverless instances
+    if (incomingUpdatedAt < this.lastUpdatedAt) {
+      return;
+    }
+
     const hash = this.computeHash(payload);
-    if (hash === this.lastStateHash) return;
+    if (hash === this.lastStateHash && incomingUpdatedAt === this.lastUpdatedAt) {
+      return;
+    }
+
     this.lastStateHash = hash;
+    this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
 
     const cleaned = {
       ...payload,
       remainingGames: (payload.remainingGames || []).map(fixGameName),
       drawnGames: (payload.drawnGames || []).map(fixGameName),
-      activeGame: fixGameName(payload.activeGame)
+      activeGame: fixGameName(payload.activeGame),
+      updatedAt: this.lastUpdatedAt
     };
 
-    saveState(cleaned);
+    if (shouldPersist) {
+      saveState(cleaned);
+    }
 
     if (this.onStateUpdate) {
       this.onStateUpdate(cleaned);
@@ -137,39 +148,52 @@ export class SyncEngine {
   initCloudPolling() {
     const fetchLatest = () => {
       if (typeof fetch === 'undefined') return;
-      fetch(SYNC_API_ENDPOINT)
+      fetch(`${SYNC_API_ENDPOINT}?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data && data.remainingGames) {
-            this.processCloudPayload(data);
+            this.processIncomingPayload(data, true);
           }
         })
         .catch(() => {});
     };
 
     fetchLatest();
-    this.pollInterval = setInterval(fetchLatest, 600);
+    this.pollInterval = setInterval(fetchLatest, 800);
   }
 
   broadcast(state) {
+    const now = Date.now();
+    const newTimestamp = Math.max(now, this.lastUpdatedAt + 1);
+    this.lastUpdatedAt = newTimestamp;
+
     const cleanedState = {
       ...state,
       remainingGames: (state.remainingGames || []).map(fixGameName),
       drawnGames: (state.drawnGames || []).map(fixGameName),
-      activeGame: fixGameName(state.activeGame)
+      activeGame: fixGameName(state.activeGame),
+      updatedAt: newTimestamp
     };
 
     this.lastStateHash = this.computeHash(cleanedState);
     saveState(cleanedState);
 
     if (this.channel) {
-      this.channel.postMessage(cleanedState);
+      try {
+        this.channel.postMessage(cleanedState);
+      } catch (e) {}
     }
 
     if (typeof fetch !== 'undefined') {
       fetch(SYNC_API_ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify(cleanedState)
       }).catch(() => {});
     }
@@ -193,3 +217,4 @@ export class SyncEngine {
 }
 
 export { INITIAL_GAMES, fixGameName };
+

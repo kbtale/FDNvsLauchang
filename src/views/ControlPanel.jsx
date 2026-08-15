@@ -93,35 +93,44 @@ export default function ControlPanel() {
 
     const randomIndex = Math.floor(Math.random() * state.remainingGames.length);
     const spinSeed = Date.now();
+    const initiatorId = syncEngine.clientId;
 
     const spinningState = {
       ...state,
       isSpinning: true,
       winningIndex: randomIndex,
       showWinnerModal: false,
-      spinSeed: spinSeed
+      spinSeed: spinSeed,
+      spinInitiator: initiatorId
     };
 
     syncEngine.broadcast(spinningState);
 
     if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
     fallbackTimerRef.current = setTimeout(() => {
-      if (state.remainingGames && state.remainingGames[randomIndex]) {
-        const selected = state.remainingGames[randomIndex];
-        const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
-        const newDrawn = state.drawnGames.includes(selected) ? state.drawnGames : [...state.drawnGames, selected];
+      const currentState = state;
+      const currentRemaining = currentState.remainingGames || [];
+      if (currentRemaining.length > 0) {
+        const safeIndex = (randomIndex >= 0 && randomIndex < currentRemaining.length) ? randomIndex : 0;
+        const selected = currentRemaining[safeIndex];
+        const newRemaining = currentRemaining.filter((_, idx) => idx !== safeIndex);
+        const newDrawn = (currentState.drawnGames || []).includes(selected)
+          ? currentState.drawnGames
+          : [...(currentState.drawnGames || []), selected];
+
         const finalState = {
-          ...spinningState,
+          ...currentState,
           isSpinning: false,
           winningIndex: null,
           activeGame: selected,
           remainingGames: newRemaining,
           drawnGames: newDrawn,
-          showWinnerModal: true
+          showWinnerModal: true,
+          spinInitiator: null
         };
         syncEngine.broadcast(finalState);
       }
-    }, 7500);
+    }, 5600);
   };
 
   const updateScore = (team, delta) => {

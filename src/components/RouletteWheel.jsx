@@ -3,11 +3,11 @@ import confetti from 'canvas-confetti';
 import { fixGameName } from '../lib/sync';
 
 const SLICE_COLORS = [
-  '#0D9F67',
-  '#172621',
   '#D99B26',
-  '#B82E2E',
-  '#165A6E'
+  '#0D9F67',
+  '#C93232',
+  '#16201C',
+  '#0D9F67'
 ];
 
 const GAME_IMAGE_MAP = {
@@ -28,7 +28,7 @@ export default function RouletteWheel({
   showWinnerModal,
   activeGame,
   onCloseModal,
-  size = 500
+  size = 520
 }) {
   const canvasRef = useRef(null);
   const [rotation, setRotation] = useState(0);
@@ -63,8 +63,8 @@ export default function RouletteWheel({
     const height = canvas.height;
     const centerX = width / 2;
     const centerY = height / 2;
-    const outerRadius = width / 2 - 12;
-    const innerRadius = outerRadius - 22;
+    const outerRadius = width / 2 - 14;
+    const innerRadius = outerRadius - 26;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -73,7 +73,7 @@ export default function RouletteWheel({
       ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#121917';
       ctx.fill();
-      ctx.strokeStyle = '#0d9f67';
+      ctx.strokeStyle = '#d99b26';
       ctx.lineWidth = 6;
       ctx.stroke();
 
@@ -91,23 +91,30 @@ export default function RouletteWheel({
 
     ctx.beginPath();
     ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#0a0f0d';
+    ctx.fillStyle = '#080d0b';
     ctx.fill();
-    ctx.strokeStyle = '#22332c';
-    ctx.lineWidth = 16;
+    ctx.strokeStyle = '#1e2b27';
+    ctx.lineWidth = 18;
     ctx.stroke();
 
-    const pinCount = 18;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerRadius + 8, 0, Math.PI * 2);
+    ctx.strokeStyle = '#d99b26';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const pinCount = 20;
     for (let p = 0; p < pinCount; p++) {
       const pinAngle = (p * Math.PI * 2) / pinCount;
-      const px = centerX + (outerRadius - 8) * Math.cos(pinAngle);
-      const py = centerY + (outerRadius - 8) * Math.sin(pinAngle);
+      const px = centerX + (outerRadius - 9) * Math.cos(pinAngle);
+      const py = centerY + (outerRadius - 9) * Math.sin(pinAngle);
+      
       ctx.beginPath();
-      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#d99b26';
       ctx.fill();
-      ctx.strokeStyle = '#0a0f0d';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#080d0b';
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
 
@@ -132,49 +139,52 @@ export default function RouletteWheel({
       ctx.fill();
 
       const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
-      if (gameImg) {
+      if (gameImg && gameImg.width > 0) {
         ctx.save();
         ctx.rotate(startAngle + sliceAngle / 2);
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(gameImg, 15, -innerRadius, innerRadius * 1.1, innerRadius * 2);
+        ctx.globalAlpha = 0.9;
+
+        const sliceCenterDist = innerRadius * 0.55;
+        const boxW = innerRadius * 1.1;
+        const boxH = innerRadius * 0.95;
+        const imgAspect = gameImg.width / gameImg.height;
+
+        let drawW = boxW;
+        let drawH = boxW / imgAspect;
+        if (drawH < boxH) {
+          drawH = boxH;
+          drawW = boxH * imgAspect;
+        }
+
+        ctx.drawImage(gameImg, sliceCenterDist - drawW / 2, -drawH / 2, drawW, drawH);
         ctx.globalAlpha = 1.0;
         ctx.restore();
 
-        ctx.fillStyle = 'rgba(6, 10, 8, 0.45)';
+        ctx.fillStyle = 'rgba(8, 12, 10, 0.35)';
         ctx.fill();
       }
 
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.arc(0, 0, innerRadius, startAngle, endAngle);
-      ctx.strokeStyle = '#0a0f0d';
+      ctx.strokeStyle = '#080d0b';
       ctx.lineWidth = 4;
       ctx.stroke();
 
       ctx.save();
       ctx.rotate(startAngle + sliceAngle / 2);
 
-      ctx.font = '900 15px "Plus Jakarta Sans", sans-serif';
-      const textWidth = ctx.measureText(gameName).width;
-
-      ctx.fillStyle = 'rgba(6, 10, 8, 0.9)';
-      ctx.beginPath();
-      ctx.roundRect(innerRadius - textWidth - 36, -16, textWidth + 24, 32, 16);
-      ctx.fill();
-      ctx.strokeStyle = '#0d9f67';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
 
+      ctx.font = '900 17px "Plus Jakarta Sans", sans-serif';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 6;
       ctx.lineJoin = 'round';
-      ctx.strokeText(gameName, innerRadius - 24, 0);
+      ctx.strokeText(gameName, innerRadius - 22, 0);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(gameName, innerRadius - 24, 0);
+      ctx.fillText(gameName, innerRadius - 22, 0);
 
       ctx.restore();
       ctx.restore();

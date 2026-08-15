@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
@@ -15,6 +15,7 @@ export default function ControlPanel() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const fallbackTimerRef = useRef(null);
 
   useEffect(() => {
     const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
@@ -37,10 +38,17 @@ export default function ControlPanel() {
   useEffect(() => {
     if (isAuthenticated) {
       const engine = new SyncEngine((newState) => {
+        if (!newState.isSpinning && fallbackTimerRef.current) {
+          clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = null;
+        }
         setState(newState);
       });
       setSyncEngine(engine);
-      return () => engine.destroy();
+      return () => {
+        if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+        engine.destroy();
+      };
     }
   }, [isAuthenticated]);
 
@@ -85,9 +93,6 @@ export default function ControlPanel() {
 
     const randomIndex = Math.floor(Math.random() * state.remainingGames.length);
     const selectedGame = state.remainingGames[randomIndex];
-    const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
-    const newDrawn = [...state.drawnGames, selectedGame];
-
     const spinSeed = Date.now();
 
     const spinningState = {
@@ -100,7 +105,10 @@ export default function ControlPanel() {
 
     syncEngine.broadcast(spinningState);
 
-    setTimeout(() => {
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = setTimeout(() => {
+      const newRemaining = state.remainingGames.filter((_, idx) => idx !== randomIndex);
+      const newDrawn = [...state.drawnGames, selectedGame];
       const finalState = {
         ...spinningState,
         isSpinning: false,
@@ -111,7 +119,7 @@ export default function ControlPanel() {
         showWinnerModal: true
       };
       syncEngine.broadcast(finalState);
-    }, 5300);
+    }, 7000);
   };
 
   const updateScore = (team, delta) => {

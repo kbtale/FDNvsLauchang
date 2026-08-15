@@ -15,11 +15,11 @@ export default function RouletteOverlay() {
   }, []);
 
   const handleSpinEnd = () => {
-    if (!syncEngine || state.winningIndex === null || !state.remainingGames[state.winningIndex]) return;
+    if (!syncEngine || state.winningIndex === null || !state.remainingGames || !state.remainingGames[state.winningIndex]) return;
     
     const selected = state.remainingGames[state.winningIndex];
     const newRemaining = state.remainingGames.filter((_, idx) => idx !== state.winningIndex);
-    const newDrawn = [...state.drawnGames, selected];
+    const newDrawn = state.drawnGames.includes(selected) ? state.drawnGames : [...state.drawnGames, selected];
 
     const newState = {
       ...state,

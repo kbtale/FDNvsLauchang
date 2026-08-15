@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
+import { fixGameName } from '../lib/sync';
 
 const SLICE_COLORS = [
   '#0D9F67',
@@ -14,6 +15,8 @@ const GAME_IMAGE_MAP = {
   'CLASH ROYALE': '/games/clashroyalebanner.jpg',
   'COPA ROBLOX': '/games/robloxbanner.png',
   'COUNTER-STRIKE 2': '/games/counterstrike.webp',
+  'COUNTER STRIKE': '/games/counterstrike.webp',
+  'CS': '/games/counterstrike.webp',
   'FALL GUYS': '/games/fallguysbanner.jpg'
 };
 
@@ -43,11 +46,11 @@ export default function RouletteWheel({
   }, []);
 
   useEffect(() => {
-    Object.entries(GAME_IMAGE_MAP).forEach(([game, src]) => {
+    Object.entries(GAME_IMAGE_MAP).forEach(([gameKey, src]) => {
       const img = new Image();
       img.src = src;
       img.onload = () => {
-        setLoadedImages((prev) => ({ ...prev, [game]: img }));
+        setLoadedImages((prev) => ({ ...prev, [gameKey]: img }));
       };
     });
   }, []);
@@ -82,7 +85,8 @@ export default function RouletteWheel({
       return;
     }
 
-    const numSlices = remainingGames.length;
+    const normalizedGames = remainingGames.map(fixGameName);
+    const numSlices = normalizedGames.length;
     const sliceAngle = (Math.PI * 2) / numSlices;
 
     ctx.beginPath();
@@ -112,7 +116,8 @@ export default function RouletteWheel({
     ctx.rotate((rotation * Math.PI) / 180);
 
     for (let i = 0; i < numSlices; i++) {
-      const gameName = remainingGames[i];
+      const rawGameName = normalizedGames[i];
+      const gameName = fixGameName(rawGameName);
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
 
@@ -126,18 +131,16 @@ export default function RouletteWheel({
       ctx.fillStyle = SLICE_COLORS[i % SLICE_COLORS.length];
       ctx.fill();
 
-      const gameImg = loadedImages[gameName];
+      const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
       if (gameImg) {
         ctx.save();
         ctx.rotate(startAngle + sliceAngle / 2);
         ctx.globalAlpha = 0.85;
-        const imgW = innerRadius * 1.2;
-        const imgH = innerRadius * 0.8;
-        ctx.drawImage(gameImg, 30, -imgH / 2, imgW, imgH);
+        ctx.drawImage(gameImg, 15, -innerRadius, innerRadius * 1.1, innerRadius * 2);
         ctx.globalAlpha = 1.0;
         ctx.restore();
 
-        ctx.fillStyle = 'rgba(10, 15, 13, 0.4)';
+        ctx.fillStyle = 'rgba(6, 10, 8, 0.45)';
         ctx.fill();
       }
 
@@ -151,12 +154,12 @@ export default function RouletteWheel({
       ctx.save();
       ctx.rotate(startAngle + sliceAngle / 2);
 
-      ctx.font = '900 16px "Plus Jakarta Sans", sans-serif';
+      ctx.font = '900 15px "Plus Jakarta Sans", sans-serif';
       const textWidth = ctx.measureText(gameName).width;
 
-      ctx.fillStyle = 'rgba(8, 12, 10, 0.85)';
+      ctx.fillStyle = 'rgba(6, 10, 8, 0.9)';
       ctx.beginPath();
-      ctx.roundRect(innerRadius - textWidth - 36, -15, textWidth + 24, 30, 15);
+      ctx.roundRect(innerRadius - textWidth - 36, -16, textWidth + 24, 32, 16);
       ctx.fill();
       ctx.strokeStyle = '#0d9f67';
       ctx.lineWidth = 1.5;
@@ -166,7 +169,7 @@ export default function RouletteWheel({
       ctx.textBaseline = 'middle';
 
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 5;
+      ctx.lineWidth = 6;
       ctx.lineJoin = 'round';
       ctx.strokeText(gameName, innerRadius - 24, 0);
 
@@ -233,6 +236,8 @@ export default function RouletteWheel({
     }
   }, [isSpinning, winningIndex]);
 
+  const displayWinner = fixGameName(activeGame);
+
   return (
     <div className="roulette-wrapper">
       <div className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`} />
@@ -257,14 +262,14 @@ export default function RouletteWheel({
         />
       </div>
 
-      {showWinnerModal && activeGame && (
+      {showWinnerModal && displayWinner && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
             <div className="pill-badge badge-green" style={{ marginBottom: 16 }}>
               ¡JUEGO SELECCIONADO!
             </div>
-            <h1 style={{ fontSize: 38, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-              {activeGame}
+            <h1 style={{ fontSize: 36, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+              {displayWinner}
             </h1>
             <p style={{ fontSize: 15, opacity: 0.8, marginBottom: 28, fontWeight: 600 }}>
               FDN VS LAUCHANG

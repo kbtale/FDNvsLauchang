@@ -1,10 +1,11 @@
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
-const STORAGE_KEY = 'fdn_vs_lauchang_state_v2';
-const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v2';
+const STORAGE_KEY = 'fdn_vs_lauchang_state_v3';
+const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v3';
 
-const normalizeGameName = (name) => {
+const fixGameName = (name) => {
   if (!name) return name;
-  if (name === 'CS' || name === 'COUNTER STRIKE' || name === 'COUNTER STRIKE 2') {
+  const upper = String(name).trim().toUpperCase();
+  if (upper === 'CS' || upper === 'COUNTER STRIKE' || upper === 'COUNTER STRIKE 2' || upper === 'COUNTER-STRIKE' || upper === 'COUNTER-STRIKE 2') {
     return 'COUNTER-STRIKE 2';
   }
   return name;
@@ -12,12 +13,13 @@ const normalizeGameName = (name) => {
 
 export const getInitialState = () => {
   try {
+    ['fdn_vs_lauchang_state_v1', 'fdn_vs_lauchang_state_v2'].forEach(k => localStorage.removeItem(k));
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(normalizeGameName);
-      let drawn = (parsed.drawnGames || []).map(normalizeGameName);
-      let active = normalizeGameName(parsed.activeGame);
+      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(fixGameName);
+      let drawn = (parsed.drawnGames || []).map(fixGameName);
+      let active = fixGameName(parsed.activeGame);
 
       return {
         remainingGames: remaining,
@@ -48,7 +50,13 @@ export const getInitialState = () => {
 
 export const saveState = (state) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const cleanedState = {
+      ...state,
+      remainingGames: (state.remainingGames || []).map(fixGameName),
+      drawnGames: (state.drawnGames || []).map(fixGameName),
+      activeGame: fixGameName(state.activeGame)
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedState));
   } catch (e) {}
 };
 
@@ -61,7 +69,13 @@ export class SyncEngine {
 
     this.handleMessage = (event) => {
       if (event.data && this.onStateUpdate) {
-        this.onStateUpdate(event.data);
+        const cleaned = {
+          ...event.data,
+          remainingGames: (event.data.remainingGames || []).map(fixGameName),
+          drawnGames: (event.data.drawnGames || []).map(fixGameName),
+          activeGame: fixGameName(event.data.activeGame)
+        };
+        this.onStateUpdate(cleaned);
       }
     };
 
@@ -73,8 +87,14 @@ export class SyncEngine {
       if (event.key === STORAGE_KEY && event.newValue) {
         try {
           const newState = JSON.parse(event.newValue);
+          const cleaned = {
+            ...newState,
+            remainingGames: (newState.remainingGames || []).map(fixGameName),
+            drawnGames: (newState.drawnGames || []).map(fixGameName),
+            activeGame: fixGameName(newState.activeGame)
+          };
           if (this.onStateUpdate) {
-            this.onStateUpdate(newState);
+            this.onStateUpdate(cleaned);
           }
         } catch (e) {}
       }
@@ -86,12 +106,18 @@ export class SyncEngine {
   }
 
   broadcast(state) {
-    saveState(state);
+    const cleanedState = {
+      ...state,
+      remainingGames: (state.remainingGames || []).map(fixGameName),
+      drawnGames: (state.drawnGames || []).map(fixGameName),
+      activeGame: fixGameName(state.activeGame)
+    };
+    saveState(cleanedState);
     if (this.channel) {
-      this.channel.postMessage(state);
+      this.channel.postMessage(cleanedState);
     }
     if (this.onStateUpdate) {
-      this.onStateUpdate(state);
+      this.onStateUpdate(cleanedState);
     }
   }
 
@@ -105,4 +131,4 @@ export class SyncEngine {
   }
 }
 
-export { INITIAL_GAMES };
+export { INITIAL_GAMES, fixGameName };

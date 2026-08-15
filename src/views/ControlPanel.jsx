@@ -5,7 +5,6 @@ import LauchangLogo from '../components/LauchangLogo';
 import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle, Lock, LogOut, KeyRound } from 'lucide-react';
 
 const SESSION_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
-const DEFAULT_FALLBACK_PASSWORD = 'FDNvsLauchang2026!';
 
 export default function ControlPanel() {
   const [state, setState] = useState(getInitialState);
@@ -27,17 +26,11 @@ export default function ControlPanel() {
         .then((data) => {
           if (data && data.valid) {
             setIsAuthenticated(true);
-          } else if (token.includes('fdn_lauchang_admin:')) {
-            setIsAuthenticated(true);
           } else {
             sessionStorage.removeItem(SESSION_TOKEN_KEY);
           }
         })
-        .catch(() => {
-          if (token.includes('fdn_lauchang_admin:')) {
-            setIsAuthenticated(true);
-          }
-        });
+        .catch(() => {});
     }
   }, []);
 
@@ -70,19 +63,15 @@ export default function ControlPanel() {
         setIsAuthenticated(true);
         setIsLoggingIn(false);
         return;
+      } else {
+        setLoginError(data.error || 'Contraseña incorrecta');
+        setIsLoggingIn(false);
+        return;
       }
-    } catch (err) {}
-
-    if (loginPassword === DEFAULT_FALLBACK_PASSWORD) {
-      const localToken = `fdn_lauchang_admin:${Date.now()}:${DEFAULT_FALLBACK_PASSWORD}`;
-      sessionStorage.setItem(SESSION_TOKEN_KEY, localToken);
-      setIsAuthenticated(true);
+    } catch (err) {
+      setLoginError('Error al conectar con el servidor de autenticación');
       setIsLoggingIn(false);
-      return;
     }
-
-    setLoginError('Contraseña de administrador incorrecta.');
-    setIsLoggingIn(false);
   };
 
   const handleLogout = () => {
@@ -184,7 +173,7 @@ export default function ControlPanel() {
 
           <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Panel de Control Protegido</h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
-            Ingrese la contraseña del administrador del stream para acceder.
+            Ingrese la contraseña del administrador para acceder.
           </p>
 
           <form onSubmit={handleLoginSubmit}>
@@ -219,10 +208,6 @@ export default function ControlPanel() {
               {isLoggingIn ? 'Verificando...' : 'Iniciar Sesión'}
             </button>
           </form>
-
-          <div style={{ marginTop: 24, fontSize: 11, color: 'var(--text-muted)' }}>
-            Contraseña por defecto: <code style={{ backgroundColor: 'var(--panel-surface)', padding: '2px 6px', borderRadius: 4 }}>FDNvsLauchang2026!</code>
-          </div>
         </div>
       </div>
     );

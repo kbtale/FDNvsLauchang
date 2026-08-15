@@ -14,9 +14,9 @@ const GAME_IMAGE_MAP = {
   'FORTNITE': '/games/fortnitebanner.jpg',
   'CLASH ROYALE': '/games/clashroyalebanner.jpg',
   'COPA ROBLOX': '/games/robloxbanner.png',
-  'COUNTER-STRIKE 2': '/games/counterstrike.webp',
-  'COUNTER STRIKE': '/games/counterstrike.webp',
-  'CS': '/games/counterstrike.webp',
+  'COUNTER-STRIKE 2': '/games/counterstrikebanner.jpg',
+  'COUNTER STRIKE': '/games/counterstrikebanner.jpg',
+  'CS': '/games/counterstrikebanner.jpg',
   'FALL GUYS': '/games/fallguysbanner.jpg'
 };
 
@@ -139,15 +139,36 @@ export default function RouletteWheel({
       ctx.fill();
 
       const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
-      if (gameImg && gameImg.width > 0) {
+      if (gameImg && gameImg.width > 0 && gameImg.height > 0) {
         ctx.save();
-        ctx.globalAlpha = 0.85;
-        const imgSize = innerRadius * 2.3;
-        ctx.drawImage(gameImg, -imgSize / 2, -imgSize / 2, imgSize, imgSize);
+        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.globalAlpha = 0.88;
+
+        const dw = innerRadius * 1.5;
+        const dh = innerRadius * 1.5;
+        const dist = innerRadius * 0.55;
+
+        const imgRatio = gameImg.width / gameImg.height;
+        const destRatio = dw / dh;
+
+        let sw, sh, sx, sy;
+        if (imgRatio > destRatio) {
+          sw = gameImg.height * destRatio;
+          sh = gameImg.height;
+          sx = (gameImg.width - sw) / 2;
+          sy = 0;
+        } else {
+          sw = gameImg.width;
+          sh = gameImg.width / destRatio;
+          sx = 0;
+          sy = (gameImg.height - sh) / 2;
+        }
+
+        ctx.drawImage(gameImg, sx, sy, sw, sh, dist - dw / 2, -dh / 2, dw, dh);
         ctx.globalAlpha = 1.0;
         ctx.restore();
 
-        ctx.fillStyle = 'rgba(8, 12, 10, 0.3)';
+        ctx.fillStyle = 'rgba(8, 12, 10, 0.35)';
         ctx.fill();
       }
 

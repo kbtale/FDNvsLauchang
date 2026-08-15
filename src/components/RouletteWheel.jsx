@@ -278,18 +278,18 @@ export default function RouletteWheel({
       {showWinnerModal && displayWinner && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
-            <div className="pill-badge badge-green" style={{ marginBottom: 16 }}>
-              ¡JUEGO SELECCIONADO!
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.5, color: '#d99b26', textTransform: 'uppercase', marginBottom: 6 }}>
+              SELECCIÓN EN VIVO
             </div>
-            <h1 style={{ fontSize: 36, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
+            <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
               {displayWinner}
             </h1>
-            <p style={{ fontSize: 15, opacity: 0.8, marginBottom: 28, fontWeight: 600 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, fontWeight: 700 }}>
               FDN VS LAUCHANG
             </p>
             {onCloseModal && (
               <button className="btn-white" onClick={onCloseModal}>
-                Continuar Evento
+                Cerrar Resultado
               </button>
             )}
           </div>

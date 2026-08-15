@@ -116,9 +116,9 @@ html, body {
   color: var(--text-dark);
   border: none;
   border-radius: var(--radius-full);
-  padding: 12px 24px;
-  font-weight: 700;
-  font-size: 15px;
+  padding: 10px 20px;
+  font-weight: 800;
+  font-size: 14px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -181,41 +181,50 @@ html, body {
 }
 
 .animate-pop {
-  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 @keyframes popIn {
   0% {
     opacity: 0;
-    transform: scale(0.7);
+    transform: translate(-50%, -50%) scale(0.75);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
 .winner-overlay-modal {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(6, 10, 8, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  pointer-events: auto;
 }
 
 .winner-card {
-  background-color: #121917;
+  background-color: #0c1411;
   color: #ffffff;
-  border-radius: var(--radius-lg);
-  padding: 44px;
+  border-radius: 16px;
+  padding: 28px 36px;
   text-align: center;
-  max-width: 500px;
-  width: 100%;
+  min-width: 360px;
   border: 3px solid #d99b26;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.8);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85);
+  position: relative;
+  overflow: hidden;
+}
+
+.winner-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #0d9f67 0%, #d99b26 100%);
 }
 
 .roulette-wrapper {

@@ -89,8 +89,12 @@ export default function RouletteWheel({
     const numSlices = normalizedGames.length;
     const sliceAngle = (Math.PI * 2) / numSlices;
 
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate((rotation * Math.PI) / 180);
+
     ctx.beginPath();
-    ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
+    ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
     ctx.fillStyle = '#080d0b';
     ctx.fill();
     ctx.strokeStyle = '#1e2b27';
@@ -98,7 +102,7 @@ export default function RouletteWheel({
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(centerX, centerY, outerRadius + 8, 0, Math.PI * 2);
+    ctx.arc(0, 0, outerRadius + 8, 0, Math.PI * 2);
     ctx.strokeStyle = '#d99b26';
     ctx.lineWidth = 3;
     ctx.stroke();
@@ -106,8 +110,8 @@ export default function RouletteWheel({
     const pinCount = 20;
     for (let p = 0; p < pinCount; p++) {
       const pinAngle = (p * Math.PI * 2) / pinCount;
-      const px = centerX + (outerRadius - 9) * Math.cos(pinAngle);
-      const py = centerY + (outerRadius - 9) * Math.sin(pinAngle);
+      const px = (outerRadius - 9) * Math.cos(pinAngle);
+      const py = (outerRadius - 9) * Math.sin(pinAngle);
       
       ctx.beginPath();
       ctx.arc(px, py, 5, 0, Math.PI * 2);
@@ -117,10 +121,6 @@ export default function RouletteWheel({
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    ctx.rotate((rotation * Math.PI) / 180);
 
     for (let i = 0; i < numSlices; i++) {
       const rawGameName = normalizedGames[i];

@@ -17,10 +17,10 @@ export const getInitialState = () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      let remaining = (parsed.remainingGames || INITIAL_GAMES).map(fixGameName);
-      let drawn = (parsed.drawnGames || []).map(fixGameName);
-      let wheel = parsed.wheelGames ? parsed.wheelGames.map(fixGameName) : null;
-      let active = fixGameName(parsed.activeGame);
+      const remaining = (parsed.remainingGames || INITIAL_GAMES).map(fixGameName);
+      const drawn = (parsed.drawnGames || []).map(fixGameName);
+      const wheel = parsed.wheelGames ? parsed.wheelGames.map(fixGameName) : null;
+      const active = fixGameName(parsed.activeGame);
 
       return {
         remainingGames: remaining,
@@ -38,7 +38,7 @@ export const getInitialState = () => {
         updatedAt: parsed.updatedAt || 0
       };
     }
-  } catch (e) {}
+  } catch {}
 
   return {
     remainingGames: [...INITIAL_GAMES],
@@ -67,18 +67,23 @@ export const saveState = (state) => {
       activeGame: fixGameName(state.activeGame)
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedState));
-  } catch (e) {}
+  } catch {}
 };
 
 export class SyncEngine {
-  constructor(onStateUpdate) {
+  constructor(onStateUpdate, options = {}) {
     this.onStateUpdate = onStateUpdate;
+    this.getAuthToken = typeof options.getAuthToken === 'function' ? options.getAuthToken : null;
+    this.onUnauthorized = typeof options.onUnauthorized === 'function' ? options.onUnauthorized : null;
+    this.roomId = options.roomId || 'fdn-vs-lauchang';
     this.channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
       ? new BroadcastChannel(CHANNEL_NAME)
       : null;
     this.pollInterval = null;
-    this.clientId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-    
+    this.clientId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).substring(2);
+
     const initial = getInitialState();
     this.lastUpdatedAt = initial.updatedAt || 0;
     this.lastStateHash = this.computeHash(initial);
@@ -100,7 +105,7 @@ export class SyncEngine {
           if (newState && newState.remainingGames) {
             this.processIncomingPayload(newState, false);
           }
-        } catch (e) {}
+        } catch {}
       }
     };
 
@@ -120,15 +125,11 @@ export class SyncEngine {
     if (!payload || typeof payload !== 'object' || !payload.remainingGames) return;
 
     const incomingUpdatedAt = payload.updatedAt || 0;
-    
-    // Strict timestamp check: Ignore stale states received from lagging serverless instances
     if (incomingUpdatedAt < this.lastUpdatedAt) {
       return;
     }
 
     const hash = this.computeHash(payload);
-    
-    // If the core state is identical to our current state, do NOT trigger redundant re-renders
     if (hash === this.lastStateHash) {
       this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
       return;
@@ -157,9 +158,10 @@ export class SyncEngine {
   initCloudPolling() {
     const fetchLatest = () => {
       if (typeof fetch === 'undefined') return;
-      fetch(`${SYNC_API_ENDPOINT}?_t=${Date.now()}`, {
+      const roomParam = encodeURIComponent(this.roomId);
+      fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}&_t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+        headers: { Pragma: 'no-cache', 'Cache-Control': 'no-cache' }
       })
         .then((res) => res.json())
         .then((data) => {
@@ -193,18 +195,30 @@ export class SyncEngine {
     if (this.channel) {
       try {
         this.channel.postMessage(cleanedState);
-      } catch (e) {}
+      } catch {}
     }
 
     if (typeof fetch !== 'undefined') {
-      fetch(SYNC_API_ENDPOINT, {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache'
+      };
+      const token = this.getAuthToken ? this.getAuthToken() : null;
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const roomParam = encodeURIComponent(this.roomId);
+      fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache'
-        },
+        headers,
         body: JSON.stringify(cleanedState)
-      }).catch(() => {});
+      })
+        .then((res) => {
+          if ((res.status === 401 || res.status === 403) && this.onUnauthorized) {
+            this.onUnauthorized();
+          }
+        })
+        .catch(() => {});
     }
 
     if (this.onStateUpdate) {
@@ -226,4 +240,3 @@ export class SyncEngine {
 }
 
 export { INITIAL_GAMES, fixGameName };
-

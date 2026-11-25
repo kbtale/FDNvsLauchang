@@ -42,9 +42,18 @@ export default function ControlPanel() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const engine = new SyncEngine((newState) => {
-        setState(newState);
-      });
+      const engine = new SyncEngine(
+        (newState) => {
+          setState(newState);
+        },
+        {
+          getAuthToken: () => sessionStorage.getItem(SESSION_TOKEN_KEY),
+          onUnauthorized: () => {
+            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+            setIsAuthenticated(false);
+          }
+        }
+      );
       setSyncEngine(engine);
       return () => {
         if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
@@ -53,7 +62,6 @@ export default function ControlPanel() {
     }
   }, [isAuthenticated]);
 
-  // Safety watchdog: Automatically un-sticks spin state if it gets stuck for more than 7.5 seconds
   useEffect(() => {
     let safetyTimer = null;
     if (state.isSpinning && syncEngine) {

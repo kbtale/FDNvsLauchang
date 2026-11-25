@@ -1,35 +1,41 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { fixGameName } from '../lib/sync';
+import TeamAvatar from './TeamAvatar';
 import {
   DEFAULT_SPIN_DURATION_MS,
   SLICE_COLORS,
-  computeTargetRotation,
-  getSliceIndexAtPointer,
+  computeSliceLayout,
+  computeTargetRotationForLayout,
+  getSliceIndexAtPointerForLayout,
   interpolateSpinRotation,
   resolveSliceImage
 } from '../lib/wheel';
 import { playTickSound, playVictoryFanfare } from '../lib/audio';
 
 export default function RouletteWheel({
-  remainingGames,
-  wheelGames,
-  wheelRotation = 0,
-  startRotation = 0,
-  targetRotation = 0,
-  spinStartedAt = 0,
-  spinDurationMs = DEFAULT_SPIN_DURATION_MS,
-  isSpinning,
-  winningIndex,
-  spinSeed,
-  onSpinEnd,
-  showWinnerModal,
-  activeGame,
+  items = [],
+  teams = [],
+  title = 'ARENAOBS',
+  spin = {},
+  showWinnerModal = false,
+  activeItem = null,
   soundEnabled = true,
+  onSpinEnd,
   size = 520
 }) {
   const canvasRef = useRef(null);
-  const [rotation, setRotation] = useState(wheelRotation || 0);
+  const isSpinning = Boolean(spin.isSpinning);
+  const wheelItems = Array.isArray(spin.wheelItems) && spin.wheelItems.length > 0 ? spin.wheelItems : items;
+  const startRotation = typeof spin.startRotation === 'number' ? spin.startRotation : 0;
+  const targetRotation = typeof spin.targetRotation === 'number' ? spin.targetRotation : 0;
+  const spinStartedAt = typeof spin.spinStartedAt === 'number' ? spin.spinStartedAt : 0;
+  const spinDurationMs = typeof spin.spinDurationMs === 'number' && spin.spinDurationMs > 0
+    ? spin.spinDurationMs
+    : DEFAULT_SPIN_DURATION_MS;
+  const winningIndex = typeof spin.winningIndex === 'number' ? spin.winningIndex : null;
+  const spinSeed = spin.spinSeed || 0;
+
+  const [rotation, setRotation] = useState(targetRotation);
   const [isTicking, setIsTicking] = useState(false);
   const [activeLogoIndex, setActiveLogoIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
@@ -43,16 +49,18 @@ export default function RouletteWheel({
     soundEnabledRef.current = soundEnabled;
   }, [soundEnabled]);
 
-  const displayedGames = useMemo(() => {
-    const source = wheelGames && wheelGames.length > 0 ? wheelGames : remainingGames || [];
-    return source.map((entry) => (typeof entry === 'string' ? fixGameName(entry) : entry));
-  }, [wheelGames, remainingGames]);
+  const displayedItems = useMemo(() => {
+    const source = isSpinning || (wheelItems && wheelItems.length > 0) ? wheelItems : items;
+    return Array.isArray(source) ? source : [];
+  }, [isSpinning, wheelItems, items]);
+
+  const sliceLayout = useMemo(() => computeSliceLayout(displayedItems), [displayedItems]);
 
   useEffect(() => {
-    if (!isSpinning && typeof wheelRotation === 'number') {
-      setRotation(wheelRotation);
+    if (!isSpinning) {
+      setRotation(targetRotation);
     }
-  }, [wheelRotation, isSpinning]);
+  }, [targetRotation, isSpinning]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -63,7 +71,7 @@ export default function RouletteWheel({
 
   useEffect(() => {
     const urls = new Set();
-    displayedGames.forEach((item) => {
+    displayedItems.forEach((item) => {
       const url = resolveSliceImage(item);
       if (url) {
         urls.add(url);
@@ -79,7 +87,7 @@ export default function RouletteWheel({
         setLoadedImages((prev) => (prev[src] ? prev : { ...prev, [src]: img }));
       };
     });
-  }, [displayedGames, loadedImages]);
+  }, [displayedItems, loadedImages]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -94,7 +102,7 @@ export default function RouletteWheel({
 
     ctx.clearRect(0, 0, width, height);
 
-    if (!displayedGames || displayedGames.length === 0) {
+    if (sliceLayout.length === 0) {
       ctx.beginPath();
       ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#121917';
@@ -104,15 +112,12 @@ export default function RouletteWheel({
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 20px "Plus Jakarta Sans", sans-serif';
+      ctx.font = `900 ${Math.round(size * 0.038)}px "Plus Jakarta Sans", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('¡TODOS LOS JUEGOS JUGADOS!', centerX, centerY);
+      ctx.fillText('ALL SEGMENTS DRAWN', centerX, centerY);
       return;
     }
-
-    const numSlices = displayedGames.length;
-    const sliceAngle = (Math.PI * 2) / numSlices;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -139,7 +144,7 @@ export default function RouletteWheel({
       const py = (outerRadius - 9) * Math.sin(pinAngle);
 
       ctx.beginPath();
-      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(3, size * 0.0095), 0, Math.PI * 2);
       ctx.fillStyle = '#d99b26';
       ctx.fill();
       ctx.strokeStyle = '#080d0b';
@@ -147,12 +152,13 @@ export default function RouletteWheel({
       ctx.stroke();
     }
 
-    for (let i = 0; i < numSlices; i++) {
-      const entry = displayedGames[i];
-      const gameName = typeof entry === 'string' ? fixGameName(entry) : String(entry.label || '');
-      const sliceColor = (typeof entry === 'object' && entry.color) || SLICE_COLORS[i % SLICE_COLORS.length];
-      const startAngle = i * sliceAngle;
-      const endAngle = startAngle + sliceAngle;
+    sliceLayout.forEach((slice, i) => {
+      const entry = slice.item;
+      const label = typeof entry === 'string' ? entry : String(entry?.label || '');
+      const sliceColor = (typeof entry === 'object' && entry?.color) || SLICE_COLORS[i % SLICE_COLORS.length];
+      const startAngle = (slice.startDeg * Math.PI) / 180;
+      const endAngle = (slice.endDeg * Math.PI) / 180;
+      const midAngle = (slice.midDeg * Math.PI) / 180;
 
       ctx.save();
       ctx.beginPath();
@@ -172,13 +178,12 @@ export default function RouletteWheel({
       const gameImg = imageUrl ? loadedImages[imageUrl] : null;
       if (gameImg && gameImg.width > 0 && gameImg.height > 0) {
         ctx.save();
-        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.rotate(midAngle);
         ctx.globalAlpha = 0.88;
 
         const dw = innerRadius * 1.5;
         const dh = innerRadius * 1.5;
         const dist = innerRadius * 0.55;
-
         const imgRatio = gameImg.width / gameImg.height;
         const destRatio = dw / dh;
 
@@ -221,45 +226,44 @@ export default function RouletteWheel({
       ctx.stroke();
 
       ctx.save();
-      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.rotate(midAngle);
 
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
 
-      const fontSize = gameName.length > 13 ? 13.5 : 16;
-      const textOffset = gameName.length > 13 ? 14 : 22;
+      const scale = size / 520;
+      const baseFont = label.length > 14 ? 12.5 : label.length > 11 ? 14 : 16;
+      const fontSize = Math.max(9, baseFont * scale);
+      const textOffset = (label.length > 13 ? 14 : 22) * scale;
       ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
 
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = Math.max(3, 6 * scale);
       ctx.lineJoin = 'round';
-      ctx.strokeText(gameName, innerRadius - textOffset, 0);
+      ctx.strokeText(label, innerRadius - textOffset, 0);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(gameName, innerRadius - textOffset, 0);
+      ctx.fillText(label, innerRadius - textOffset, 0);
 
       ctx.restore();
       ctx.restore();
-    }
+    });
 
     ctx.restore();
-  }, [displayedGames, rotation, size, loadedImages]);
+  }, [sliceLayout, rotation, size, loadedImages]);
 
   useEffect(() => {
-    if (!isSpinning || winningIndex === null || winningIndex < 0 || displayedGames.length === 0 || !spinSeed) {
+    if (!isSpinning || winningIndex === null || winningIndex < 0 || displayedItems.length === 0 || !spinSeed) {
       return undefined;
     }
 
-    const numSlices = displayedGames.length;
-    const effectiveDuration = spinDurationMs > 0 ? spinDurationMs : DEFAULT_SPIN_DURATION_MS;
     const effectiveStart = spinStartedAt > 0 ? spinStartedAt : Date.now();
-    const effectiveStartRot = typeof startRotation === 'number' ? startRotation : rotation;
-    const effectiveTargetRot = typeof targetRotation === 'number' && targetRotation > effectiveStartRot
+    const effectiveTargetRot = targetRotation > startRotation
       ? targetRotation
-      : computeTargetRotation({
-          startRotation: effectiveStartRot,
+      : computeTargetRotationForLayout({
+          startRotation,
           winningIndex,
-          sliceCount: numSlices
+          items: displayedItems
         });
 
     let cancelled = false;
@@ -271,26 +275,28 @@ export default function RouletteWheel({
       if (onSpinEnd) {
         onSpinEnd();
       }
-      confetti({
-        particleCount: 90,
-        spread: 80,
-        origin: { y: 0.6 }
-      });
+      if (size >= 360) {
+        confetti({
+          particleCount: 90,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
     };
 
     const animate = () => {
       if (cancelled) return;
       const frame = interpolateSpinRotation({
-        startRotation: effectiveStartRot,
+        startRotation,
         targetRotation: effectiveTargetRot,
         spinStartedAt: effectiveStart,
-        spinDurationMs: effectiveDuration,
+        spinDurationMs,
         now: Date.now()
       });
 
       setRotation(frame.rotation);
 
-      const currentSlice = getSliceIndexAtPointer(frame.rotation, numSlices);
+      const currentSlice = getSliceIndexAtPointerForLayout(frame.rotation, displayedItems);
       if (currentSlice !== prevSliceIndexRef.current && !frame.done) {
         prevSliceIndexRef.current = currentSlice;
         setIsTicking(true);
@@ -324,9 +330,13 @@ export default function RouletteWheel({
         tickTimerRef.current = null;
       }
     };
-  }, [isSpinning, winningIndex, spinSeed, spinStartedAt, spinDurationMs, startRotation, targetRotation, displayedGames.length]);
+  }, [isSpinning, winningIndex, spinSeed, spinStartedAt, spinDurationMs, startRotation, targetRotation, displayedItems, size]);
 
-  const displayWinner = fixGameName(activeGame);
+  const winnerLabel = typeof activeItem === 'string' ? activeItem : activeItem?.label || '';
+  const hubSize = Math.round(size * 0.17);
+  const avatarSize = Math.round(hubSize * 0.78);
+  const teamA = teams[0] || { name: 'TEAM A', color: '#0d9f67', textColor: '#ffffff', logoUrl: '' };
+  const teamB = teams[1] || { name: 'TEAM B', color: '#d99b26', textColor: '#091210', logoUrl: '' };
 
   return (
     <div className="roulette-wrapper">
@@ -339,27 +349,35 @@ export default function RouletteWheel({
         style={{ width: `${size}px`, height: `${size}px` }}
       />
 
-      <div className="roulette-center-hub">
-        <img
-          src="/LOGO FDN.png"
-          alt="FDN Logo"
-          className={`hub-logo-img ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
-        />
-        <img
-          src="/LOGO LAUTASHE.jpeg"
-          alt="Lautashe Logo"
-          className={`hub-logo-img ${activeLogoIndex === 1 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
-        />
+      <div className="roulette-center-hub" style={{ width: hubSize, height: hubSize }}>
+        <div className={`hub-logo-slot ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}>
+          <TeamAvatar
+            name={teamA.name}
+            logoUrl={teamA.logoUrl}
+            color={teamA.color}
+            textColor={teamA.textColor}
+            size={avatarSize}
+          />
+        </div>
+        <div className={`hub-logo-slot ${activeLogoIndex === 1 ? 'hub-logo-active' : 'hub-logo-hidden'}`}>
+          <TeamAvatar
+            name={teamB.name}
+            logoUrl={teamB.logoUrl}
+            color={teamB.color}
+            textColor={teamB.textColor}
+            size={avatarSize}
+          />
+        </div>
       </div>
 
-      {showWinnerModal && displayWinner && (
+      {showWinnerModal && winnerLabel && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
-            <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
-              {displayWinner}
+            <h1 style={{ fontSize: Math.max(20, Math.round(size * 0.062)), fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
+              {winnerLabel}
             </h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 0, fontWeight: 700 }}>
-              FDN VS LAUCHANG
+              {title}
             </p>
           </div>
         </div>

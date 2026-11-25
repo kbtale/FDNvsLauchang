@@ -22,6 +22,59 @@ export function normalizeAngle(deg) {
   return ((deg % 360) + 360) % 360;
 }
 
+export function getItemWeight(item) {
+  if (item && typeof item === 'object') {
+    const w = Number(item.weight);
+    if (Number.isFinite(w) && w > 0) {
+      return Math.min(10, Math.max(1, w));
+    }
+  }
+  return 1;
+}
+
+export function computeSliceLayout(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return [];
+  }
+  const weights = items.map(getItemWeight);
+  const totalWeight = weights.reduce((acc, w) => acc + w, 0);
+  let cursor = 0;
+
+  return items.map((item, index) => {
+    const weight = weights[index];
+    const spanDeg = (weight / totalWeight) * 360;
+    const startDeg = cursor;
+    const endDeg = index === items.length - 1 ? 360 : cursor + spanDeg;
+    const midDeg = startDeg + (endDeg - startDeg) / 2;
+    cursor = endDeg;
+    return {
+      index,
+      item,
+      weight,
+      startDeg,
+      endDeg,
+      midDeg,
+      spanDeg: endDeg - startDeg
+    };
+  });
+}
+
+export function pickWeightedIndex(items, randomFn = Math.random) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return -1;
+  }
+  const weights = items.map(getItemWeight);
+  const totalWeight = weights.reduce((acc, w) => acc + w, 0);
+  let threshold = randomFn() * totalWeight;
+  for (let i = 0; i < weights.length; i++) {
+    threshold -= weights[i];
+    if (threshold <= 0) {
+      return i;
+    }
+  }
+  return weights.length - 1;
+}
+
 export function computeTargetRotation({
   startRotation = 0,
   winningIndex = 0,
@@ -40,6 +93,24 @@ export function computeTargetRotation({
   return startRotation + extraSpins * 360 + deltaMod;
 }
 
+export function computeTargetRotationForLayout({
+  startRotation = 0,
+  winningIndex = 0,
+  items = [],
+  extraSpins = 7
+}) {
+  const layout = computeSliceLayout(items);
+  if (layout.length === 0) {
+    return startRotation;
+  }
+  const safeIndex = ((winningIndex % layout.length) + layout.length) % layout.length;
+  const targetSliceCenter = layout[safeIndex].midDeg;
+  const targetMod = normalizeAngle(POINTER_ANGLE_DEG - targetSliceCenter);
+  const currentMod = normalizeAngle(startRotation);
+  const deltaMod = normalizeAngle(targetMod - currentMod);
+  return startRotation + extraSpins * 360 + deltaMod;
+}
+
 export function getSliceIndexAtPointer(rotationDeg, sliceCount) {
   if (sliceCount <= 0) {
     return -1;
@@ -47,6 +118,20 @@ export function getSliceIndexAtPointer(rotationDeg, sliceCount) {
   const sliceDeg = 360 / sliceCount;
   const normalized = normalizeAngle(POINTER_ANGLE_DEG - rotationDeg);
   return Math.floor(normalized / sliceDeg) % sliceCount;
+}
+
+export function getSliceIndexAtPointerForLayout(rotationDeg, items) {
+  const layout = computeSliceLayout(items);
+  if (layout.length === 0) {
+    return -1;
+  }
+  const normalized = normalizeAngle(POINTER_ANGLE_DEG - rotationDeg);
+  for (let i = 0; i < layout.length; i++) {
+    if (normalized >= layout[i].startDeg && normalized < layout[i].endDeg) {
+      return i;
+    }
+  }
+  return layout.length - 1;
 }
 
 export function interpolateSpinRotation({
@@ -82,6 +167,9 @@ export function resolveSliceImage(item) {
   if (typeof item === 'object') {
     if (typeof item.imageUrl === 'string' && item.imageUrl.trim().length > 0) {
       return item.imageUrl.trim();
+    }
+    if (item.imageUrl === '') {
+      return null;
     }
     const labelKey = typeof item.label === 'string' ? item.label.trim().toUpperCase() : '';
     return BUILTIN_GAME_IMAGES[labelKey] || null;

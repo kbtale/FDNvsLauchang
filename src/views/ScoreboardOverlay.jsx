@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
+import { formatScoreDelta } from '../lib/wheel';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
 import { Gamepad2 } from 'lucide-react';
@@ -7,34 +8,53 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ScoreboardOverlay() {
   const [state, setState] = useState(getInitialState);
-  const [fdnBump, setFdnBump] = useState(false);
-  const [lauchangBump, setLauchangBump] = useState(false);
+  const [fdnDelta, setFdnDelta] = useState(0);
+  const [lauchangDelta, setLauchangDelta] = useState(0);
   const prevFdnRef = useRef(state.fdnScore);
   const prevLauchangRef = useRef(state.lauchangScore);
+  const fdnTimerRef = useRef(null);
+  const lauchangTimerRef = useRef(null);
 
   useEffect(() => {
     const engine = new SyncEngine((newState) => {
       if (newState.fdnScore !== prevFdnRef.current) {
-        if (newState.fdnScore > prevFdnRef.current) {
-          setFdnBump(true);
-          setTimeout(() => setFdnBump(false), 330);
-        }
+        const diff = newState.fdnScore - prevFdnRef.current;
         prevFdnRef.current = newState.fdnScore;
+        if (diff !== 0) {
+          setFdnDelta(diff);
+          if (fdnTimerRef.current) clearTimeout(fdnTimerRef.current);
+          fdnTimerRef.current = setTimeout(() => {
+            setFdnDelta(0);
+            fdnTimerRef.current = null;
+          }, 420);
+        }
       }
 
       if (newState.lauchangScore !== prevLauchangRef.current) {
-        if (newState.lauchangScore > prevLauchangRef.current) {
-          setLauchangBump(true);
-          setTimeout(() => setLauchangBump(false), 330);
-        }
+        const diff = newState.lauchangScore - prevLauchangRef.current;
         prevLauchangRef.current = newState.lauchangScore;
+        if (diff !== 0) {
+          setLauchangDelta(diff);
+          if (lauchangTimerRef.current) clearTimeout(lauchangTimerRef.current);
+          lauchangTimerRef.current = setTimeout(() => {
+            setLauchangDelta(0);
+            lauchangTimerRef.current = null;
+          }, 420);
+        }
       }
 
       setState(newState);
     });
 
-    return () => engine.destroy();
+    return () => {
+      if (fdnTimerRef.current) clearTimeout(fdnTimerRef.current);
+      if (lauchangTimerRef.current) clearTimeout(lauchangTimerRef.current);
+      engine.destroy();
+    };
   }, []);
+
+  const fdnDeltaLabel = formatScoreDelta(fdnDelta);
+  const lauchangDeltaLabel = formatScoreDelta(lauchangDelta);
 
   return (
     <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 20 }}>
@@ -55,16 +75,22 @@ export default function ScoreboardOverlay() {
 
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
               <AnimatePresence>
-                {fdnBump && (
+                {fdnDeltaLabel && (
                   <motion.div
                     className="combat-float-text"
                     initial={{ opacity: 0, y: 15, scale: 0.5 }}
                     animate={{ opacity: 1, y: -42, scale: 1.5 }}
                     exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.33, ease: 'easeOut' }}
-                    style={{ position: 'absolute', top: 0, right: 0, zIndex: 9999 }}
+                    transition={{ duration: 0.36, ease: 'easeOut' }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      zIndex: 9999,
+                      color: fdnDelta < 0 ? '#fca5a5' : '#ffffff'
+                    }}
                   >
-                    +1
+                    {fdnDeltaLabel}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -91,16 +117,22 @@ export default function ScoreboardOverlay() {
           <div className="broadcast-3d-team-card broadcast-3d-team-lauchang">
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
               <AnimatePresence>
-                {lauchangBump && (
+                {lauchangDeltaLabel && (
                   <motion.div
                     className="combat-float-text"
                     initial={{ opacity: 0, y: 15, scale: 0.5 }}
                     animate={{ opacity: 1, y: -42, scale: 1.5 }}
                     exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.33, ease: 'easeOut' }}
-                    style={{ position: 'absolute', top: 0, left: 0, zIndex: 9999 }}
+                    transition={{ duration: 0.36, ease: 'easeOut' }}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      zIndex: 9999,
+                      color: lauchangDelta < 0 ? '#fca5a5' : '#ffffff'
+                    }}
                   >
-                    +1
+                    {lauchangDeltaLabel}
                   </motion.div>
                 )}
               </AnimatePresence>

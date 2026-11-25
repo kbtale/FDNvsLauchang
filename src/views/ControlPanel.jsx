@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
+import { DEFAULT_SPIN_DURATION_MS, computeTargetRotation } from '../lib/wheel';
 import FdnLogo from '../components/FdnLogo';
 import LauchangLogo from '../components/LauchangLogo';
-import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle, Lock, LogOut, KeyRound } from 'lucide-react';
+import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle, Lock, LogOut, KeyRound, Volume2, VolumeX } from 'lucide-react';
 
 const SESSION_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
 
@@ -125,26 +126,29 @@ export default function ControlPanel() {
     const gamesPool = [...current.remainingGames];
     const randomIndex = Math.floor(Math.random() * gamesPool.length);
     const selectedGame = gamesPool[randomIndex];
-    const spinSeed = Date.now();
-
-    const currentRotation = current.wheelRotation || 0;
-    const numSlices = gamesPool.length;
-    const sliceDeg = 360 / numSlices;
-    const targetSliceCenter = randomIndex * sliceDeg + sliceDeg / 2;
-    const desiredPointerDeg = 270;
-    const targetDeg = (desiredPointerDeg - targetSliceCenter + 360) % 360;
-    const extraSpins = 360 * 7;
-    const currentMod = currentRotation % 360;
-    const targetFinalRotation = currentRotation + extraSpins + ((targetDeg - currentMod + 360) % 360);
+    const spinStartedAt = Date.now();
+    const spinSeed = spinStartedAt;
+    const spinDurationMs = DEFAULT_SPIN_DURATION_MS;
+    const startRotation = current.wheelRotation || 0;
+    const targetRotation = computeTargetRotation({
+      startRotation,
+      winningIndex: randomIndex,
+      sliceCount: gamesPool.length,
+      extraSpins: 7
+    });
 
     const spinningState = {
       ...current,
       isSpinning: true,
       winningIndex: randomIndex,
       showWinnerModal: false,
-      spinSeed: spinSeed,
+      spinSeed,
+      spinStartedAt,
+      spinDurationMs,
+      startRotation,
+      targetRotation,
       wheelGames: gamesPool,
-      wheelRotation: currentRotation
+      wheelRotation: targetRotation
     };
 
     syncEngine.broadcast(spinningState);
@@ -165,13 +169,26 @@ export default function ControlPanel() {
         remainingGames: remaining,
         drawnGames: drawn,
         wheelGames: gamesPool,
-        wheelRotation: targetFinalRotation,
+        wheelRotation: targetRotation,
+        startRotation,
+        targetRotation,
+        spinStartedAt,
+        spinDurationMs,
         showWinnerModal: true,
-        spinSeed: spinSeed
+        spinSeed
       };
       syncEngine.broadcast(finalState);
       spinTimerRef.current = null;
-    }, 5400);
+    }, spinDurationMs + 150);
+  };
+
+  const toggleSound = () => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    syncEngine.broadcast({
+      ...latest,
+      soundEnabled: latest.soundEnabled === false
+    });
   };
 
   const updateScore = (team, delta) => {
@@ -247,6 +264,11 @@ export default function ControlPanel() {
       drawnGames: [],
       wheelGames: null,
       wheelRotation: 0,
+      startRotation: 0,
+      targetRotation: 0,
+      spinStartedAt: 0,
+      spinDurationMs: DEFAULT_SPIN_DURATION_MS,
+      soundEnabled: stateRef.current.soundEnabled !== false,
       fdnScore: 0,
       lauchangScore: 0,
       activeGame: null,
@@ -338,6 +360,14 @@ export default function ControlPanel() {
             >
               Overlay Marcador <ExternalLink size={16} />
             </a>
+            <button
+              className="btn-secondary"
+              onClick={toggleSound}
+              title={state.soundEnabled !== false ? 'Silenciar efectos de ruleta' : 'Activar efectos de ruleta'}
+            >
+              {state.soundEnabled !== false ? <Volume2 size={16} color="var(--accent-gold)" /> : <VolumeX size={16} />}
+              {state.soundEnabled !== false ? 'Audio ON' : 'Audio OFF'}
+            </button>
             <button className="btn-danger" onClick={handleLogout} style={{ padding: '8px 16px' }}>
               <LogOut size={16} /> Salir
             </button>

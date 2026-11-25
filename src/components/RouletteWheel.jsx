@@ -1,36 +1,31 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import { fixGameName } from '../lib/sync';
-
-const SLICE_COLORS = [
-  '#D99B26',
-  '#0D9F67',
-  '#C93232',
-  '#16201C',
-  '#0D9F67'
-];
-
-const GAME_IMAGE_MAP = {
-  'FORTNITE': '/games/fortnitebanner.jpg',
-  'CLASH ROYALE': '/games/clashroyalebanner.jpg',
-  'COPA ROBLOX': '/games/robloxbanner.png',
-  'COUNTER-STRIKE 2': '/games/counterstrikebanner.jpg',
-  'COUNTER STRIKE': '/games/counterstrikebanner.jpg',
-  'CS': '/games/counterstrikebanner.jpg',
-  'FALL GUYS': '/games/fallguysbanner.jpg'
-};
+import {
+  DEFAULT_SPIN_DURATION_MS,
+  SLICE_COLORS,
+  computeTargetRotation,
+  getSliceIndexAtPointer,
+  interpolateSpinRotation,
+  resolveSliceImage
+} from '../lib/wheel';
+import { playTickSound, playVictoryFanfare } from '../lib/audio';
 
 export default function RouletteWheel({
   remainingGames,
   wheelGames,
   wheelRotation = 0,
+  startRotation = 0,
+  targetRotation = 0,
+  spinStartedAt = 0,
+  spinDurationMs = DEFAULT_SPIN_DURATION_MS,
   isSpinning,
   winningIndex,
   spinSeed,
   onSpinEnd,
   showWinnerModal,
   activeGame,
-  onCloseModal,
+  soundEnabled = true,
   size = 520
 }) {
   const canvasRef = useRef(null);
@@ -39,19 +34,25 @@ export default function RouletteWheel({
   const [activeLogoIndex, setActiveLogoIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
   const animRef = useRef(null);
+  const tickTimerRef = useRef(null);
   const prevSliceIndexRef = useRef(-1);
-  const activeSpinSeedRef = useRef(null);
+  const celebratedSeedRef = useRef(null);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
+  const displayedGames = useMemo(() => {
+    const source = wheelGames && wheelGames.length > 0 ? wheelGames : remainingGames || [];
+    return source.map((entry) => (typeof entry === 'string' ? fixGameName(entry) : entry));
+  }, [wheelGames, remainingGames]);
 
   useEffect(() => {
     if (!isSpinning && typeof wheelRotation === 'number') {
       setRotation(wheelRotation);
     }
   }, [wheelRotation, isSpinning]);
-
-  const displayedGames = (isSpinning
-    ? remainingGames
-    : (wheelGames && wheelGames.length > 0 ? wheelGames : remainingGames)
-  ).map(fixGameName);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,14 +62,24 @@ export default function RouletteWheel({
   }, []);
 
   useEffect(() => {
-    Object.entries(GAME_IMAGE_MAP).forEach(([gameKey, src]) => {
+    const urls = new Set();
+    displayedGames.forEach((item) => {
+      const url = resolveSliceImage(item);
+      if (url) {
+        urls.add(url);
+      }
+    });
+
+    urls.forEach((src) => {
+      if (loadedImages[src]) return;
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.src = src;
       img.onload = () => {
-        setLoadedImages((prev) => ({ ...prev, [gameKey]: img }));
+        setLoadedImages((prev) => (prev[src] ? prev : { ...prev, [src]: img }));
       };
     });
-  }, []);
+  }, [displayedGames, loadedImages]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -126,7 +137,7 @@ export default function RouletteWheel({
       const pinAngle = (p * Math.PI * 2) / pinCount;
       const px = (outerRadius - 9) * Math.cos(pinAngle);
       const py = (outerRadius - 9) * Math.sin(pinAngle);
-      
+
       ctx.beginPath();
       ctx.arc(px, py, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#d99b26';
@@ -137,8 +148,9 @@ export default function RouletteWheel({
     }
 
     for (let i = 0; i < numSlices; i++) {
-      const rawGameName = displayedGames[i];
-      const gameName = fixGameName(rawGameName);
+      const entry = displayedGames[i];
+      const gameName = typeof entry === 'string' ? fixGameName(entry) : String(entry.label || '');
+      const sliceColor = (typeof entry === 'object' && entry.color) || SLICE_COLORS[i % SLICE_COLORS.length];
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
 
@@ -149,10 +161,15 @@ export default function RouletteWheel({
       ctx.closePath();
       ctx.clip();
 
-      ctx.fillStyle = SLICE_COLORS[i % SLICE_COLORS.length];
+      const grad = ctx.createRadialGradient(0, 0, 18, 0, 0, innerRadius);
+      grad.addColorStop(0, '#0f1714');
+      grad.addColorStop(0.28, sliceColor);
+      grad.addColorStop(1, sliceColor);
+      ctx.fillStyle = grad;
       ctx.fill();
 
-      const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
+      const imageUrl = resolveSliceImage(entry);
+      const gameImg = imageUrl ? loadedImages[imageUrl] : null;
       if (gameImg && gameImg.width > 0 && gameImg.height > 0) {
         ctx.save();
         ctx.rotate(startAngle + sliceAngle / 2);
@@ -165,7 +182,10 @@ export default function RouletteWheel({
         const imgRatio = gameImg.width / gameImg.height;
         const destRatio = dw / dh;
 
-        let sw, sh, sx, sy;
+        let sw;
+        let sh;
+        let sx;
+        let sy;
         if (imgRatio > destRatio) {
           sw = gameImg.height * destRatio;
           sh = gameImg.height;
@@ -183,6 +203,13 @@ export default function RouletteWheel({
         ctx.restore();
 
         ctx.fillStyle = 'rgba(8, 12, 10, 0.35)';
+        ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.beginPath();
+        ctx.arc(0, 0, innerRadius * 0.86, startAngle, endAngle);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
         ctx.fill();
       }
 
@@ -202,7 +229,7 @@ export default function RouletteWheel({
       const fontSize = gameName.length > 13 ? 13.5 : 16;
       const textOffset = gameName.length > 13 ? 14 : 22;
       ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-      
+
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 6;
       ctx.lineJoin = 'round';
@@ -219,66 +246,92 @@ export default function RouletteWheel({
   }, [displayedGames, rotation, size, loadedImages]);
 
   useEffect(() => {
-    if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0 && spinSeed) {
-      if (activeSpinSeedRef.current === spinSeed) {
-        return;
-      }
-      activeSpinSeedRef.current = spinSeed;
-
-      const numSlices = remainingGames.length;
-      const sliceDeg = 360 / numSlices;
-      const targetSliceCenter = winningIndex * sliceDeg + sliceDeg / 2;
-      const desiredPointerDeg = 270;
-      const targetDeg = (desiredPointerDeg - targetSliceCenter + 360) % 360;
-      
-      const extraSpins = 360 * 7;
-      const currentMod = rotation % 360;
-      const finalRotation = rotation + extraSpins + (targetDeg - currentMod + 360) % 360;
-      
-      const startTime = performance.now();
-      const duration = 5200;
-      const startRotation = rotation;
-
-      const animate = (currentTime) => {
-        const elapsed = currentTime - startTime;
-        if (elapsed < duration) {
-          const progress = elapsed / duration;
-          const easeOut = 1 - Math.pow(1 - progress, 4);
-          const currentRot = startRotation + (finalRotation - startRotation) * easeOut;
-          setRotation(currentRot);
-
-          const currentSlice = Math.floor((((270 - currentRot) % 360 + 360) % 360) / sliceDeg);
-          if (currentSlice !== prevSliceIndexRef.current) {
-            prevSliceIndexRef.current = currentSlice;
-            setIsTicking(true);
-            setTimeout(() => setIsTicking(false), 50);
-          }
-
-          animRef.current = requestAnimationFrame(animate);
-        } else {
-          setRotation(finalRotation);
-          if (onSpinEnd) {
-            onSpinEnd();
-          }
-          confetti({
-            particleCount: 90,
-            spread: 80,
-            origin: { y: 0.6 }
-          });
-        }
-      };
-
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      animRef.current = requestAnimationFrame(animate);
+    if (!isSpinning || winningIndex === null || winningIndex < 0 || displayedGames.length === 0 || !spinSeed) {
+      return undefined;
     }
-  }, [isSpinning, winningIndex, spinSeed]);
+
+    const numSlices = displayedGames.length;
+    const effectiveDuration = spinDurationMs > 0 ? spinDurationMs : DEFAULT_SPIN_DURATION_MS;
+    const effectiveStart = spinStartedAt > 0 ? spinStartedAt : Date.now();
+    const effectiveStartRot = typeof startRotation === 'number' ? startRotation : rotation;
+    const effectiveTargetRot = typeof targetRotation === 'number' && targetRotation > effectiveStartRot
+      ? targetRotation
+      : computeTargetRotation({
+          startRotation: effectiveStartRot,
+          winningIndex,
+          sliceCount: numSlices
+        });
+
+    let cancelled = false;
+
+    const triggerCelebration = () => {
+      if (celebratedSeedRef.current === spinSeed) return;
+      celebratedSeedRef.current = spinSeed;
+      playVictoryFanfare(soundEnabledRef.current);
+      if (onSpinEnd) {
+        onSpinEnd();
+      }
+      confetti({
+        particleCount: 90,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+    };
+
+    const animate = () => {
+      if (cancelled) return;
+      const frame = interpolateSpinRotation({
+        startRotation: effectiveStartRot,
+        targetRotation: effectiveTargetRot,
+        spinStartedAt: effectiveStart,
+        spinDurationMs: effectiveDuration,
+        now: Date.now()
+      });
+
+      setRotation(frame.rotation);
+
+      const currentSlice = getSliceIndexAtPointer(frame.rotation, numSlices);
+      if (currentSlice !== prevSliceIndexRef.current && !frame.done) {
+        prevSliceIndexRef.current = currentSlice;
+        setIsTicking(true);
+        playTickSound(soundEnabledRef.current);
+        if (tickTimerRef.current) clearTimeout(tickTimerRef.current);
+        tickTimerRef.current = setTimeout(() => {
+          setIsTicking(false);
+          tickTimerRef.current = null;
+        }, 55);
+      }
+
+      if (!frame.done) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        animRef.current = null;
+        setIsTicking(false);
+        triggerCelebration();
+      }
+    };
+
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelled = true;
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      if (tickTimerRef.current) {
+        clearTimeout(tickTimerRef.current);
+        tickTimerRef.current = null;
+      }
+    };
+  }, [isSpinning, winningIndex, spinSeed, spinStartedAt, spinDurationMs, startRotation, targetRotation, displayedGames.length]);
 
   const displayWinner = fixGameName(activeGame);
 
   return (
     <div className="roulette-wrapper">
       <div className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`} />
-      
+
       <canvas
         ref={canvasRef}
         width={size}

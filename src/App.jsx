@@ -1,4 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Toast,
+  ToastAction,
+  ToastDescription,
+  ToastRegion,
+  ToastTitle
+} from '@ui-sdk/react/toast';
 import Hub from './views/Hub';
 import ControlPanel from './views/ControlPanel';
 import RouletteOverlay from './views/RouletteOverlay';
@@ -49,16 +56,35 @@ export default function App() {
   }, []);
 
   const route = parseRoute(currentPath);
+  const isOverlay = route.view === 'roulette' || route.view === 'scoreboard';
 
+  let page;
   if (route.view === 'control') {
-    return <ControlPanel roomId={route.roomId} legacyRoute={route.legacyRoute} />;
-  }
-  if (route.view === 'roulette') {
-    return <RouletteOverlay roomId={route.roomId} />;
-  }
-  if (route.view === 'scoreboard') {
-    return <ScoreboardOverlay roomId={route.roomId} />;
+    page = <ControlPanel roomId={route.roomId} legacyRoute={route.legacyRoute} />;
+  } else if (route.view === 'roulette') {
+    page = <RouletteOverlay roomId={route.roomId} />;
+  } else if (route.view === 'scoreboard') {
+    page = <ScoreboardOverlay roomId={route.roomId} />;
+  } else {
+    page = <Hub />;
   }
 
-  return <Hub />;
+  return (
+    <>
+      {page}
+      {!isOverlay && (
+        <ToastRegion side="bottom" align="end">
+          {() => (
+            <Toast className="studio-toast">
+              <div className="studio-toast-body">
+                <ToastTitle className="studio-toast-title" />
+                <ToastDescription className="studio-toast-desc" />
+              </div>
+              <ToastAction className="btn-secondary studio-toast-action" />
+            </Toast>
+          )}
+        </ToastRegion>
+      )}
+    </>
+  );
 }

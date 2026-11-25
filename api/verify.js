@@ -1,26 +1,43 @@
-export default function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+import {
+  applyCors,
+  extractBearerToken,
+  normalizeRoomId,
+  verifyRoomToken
+} from './_lib/auth.js';
+
+export default async function handler(req, res) {
+  const cors = applyCors(req, res, { methods: 'GET, POST, OPTIONS', allowPublicRead: false });
 
   if (req.method === 'OPTIONS') {
+    if (!cors.allowed) {
+      return res.status(403).end();
+    }
     return res.status(200).end();
   }
 
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  const secretPassword = process.env.ADMIN_PASSWORD || 'FDNvsLauchang2026!';
+  if (!cors.allowed) {
+    return res.status(403).json({ valid: false, error: 'Origin not allowed' });
+  }
 
+  const token = extractBearerToken(req);
   if (!token) {
     return res.status(401).json({ valid: false });
   }
 
-  try {
-    const decoded = Buffer.from(token, 'base64').toString('utf-8');
-    if (decoded.startsWith('fdn_lauchang_admin:') && decoded.endsWith(`:${secretPassword}`)) {
-      return res.status(200).json({ valid: true });
-    }
-  } catch (e) {}
+  const rawRoom = req.query?.room ?? req.body?.roomId;
+  const expectedRoomId = rawRoom !== undefined && rawRoom !== '' ? normalizeRoomId(rawRoom) : null;
+  if (rawRoom !== undefined && rawRoom !== '' && !expectedRoomId) {
+    return res.status(400).json({ valid: false, error: 'Invalid roomId' });
+  }
 
-  return res.status(401).json({ valid: false });
+  const result = verifyRoomToken(token, { expectedRoomId });
+  if (!result.valid) {
+    return res.status(result.status).json({ valid: false, reason: result.reason });
+  }
+
+  return res.status(200).json({
+    valid: true,
+    roomId: result.roomId,
+    exp: result.exp
+  });
 }

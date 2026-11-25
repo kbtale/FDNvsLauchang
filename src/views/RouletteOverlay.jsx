@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
+import { DEFAULT_ROOM_ID } from '../lib/roomSchema';
 import RouletteWheel from '../components/RouletteWheel';
 
-export default function RouletteOverlay() {
-  const [state, setState] = useState(getInitialState);
+export default function RouletteOverlay({ roomId = DEFAULT_ROOM_ID }) {
+  const [state, setState] = useState(() => getInitialState(roomId));
 
   const queryOptions = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -16,11 +17,15 @@ export default function RouletteOverlay() {
   }, []);
 
   useEffect(() => {
-    const engine = new SyncEngine((newState) => {
-      setState(newState);
-    });
+    setState(getInitialState(roomId));
+    const engine = new SyncEngine(
+      (newState) => {
+        setState(newState);
+      },
+      { roomId }
+    );
     return () => engine.destroy();
-  }, []);
+  }, [roomId]);
 
   const soundEnabled = queryOptions.soundOverride !== null
     ? queryOptions.soundOverride
@@ -29,18 +34,12 @@ export default function RouletteOverlay() {
   return (
     <div className="overlay-container transparent-bg">
       <RouletteWheel
-        remainingGames={state.remainingGames}
-        wheelGames={state.wheelGames}
-        wheelRotation={state.wheelRotation}
-        startRotation={state.startRotation}
-        targetRotation={state.targetRotation}
-        spinStartedAt={state.spinStartedAt}
-        spinDurationMs={state.spinDurationMs}
-        isSpinning={state.isSpinning}
-        winningIndex={state.winningIndex}
-        spinSeed={state.spinSeed}
+        items={state.items}
+        teams={state.teams}
+        title={state.title}
+        spin={state.spin}
         showWinnerModal={state.showWinnerModal}
-        activeGame={state.activeGame}
+        activeItem={state.activeItem}
         soundEnabled={soundEnabled}
         size={queryOptions.size}
       />

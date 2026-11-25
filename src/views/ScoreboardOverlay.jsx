@@ -1,179 +1,283 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
+import { DEFAULT_ROOM_ID } from '../lib/roomSchema';
 import { formatScoreDelta } from '../lib/wheel';
-import FdnLogo from '../components/FdnLogo';
-import LauchangLogo from '../components/LauchangLogo';
+import TeamAvatar from '../components/TeamAvatar';
 import { Gamepad2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ScoreboardOverlay() {
-  const [state, setState] = useState(getInitialState);
-  const [fdnDelta, setFdnDelta] = useState(0);
-  const [lauchangDelta, setLauchangDelta] = useState(0);
-  const prevFdnRef = useRef(state.fdnScore);
-  const prevLauchangRef = useRef(state.lauchangScore);
-  const fdnTimerRef = useRef(null);
-  const lauchangTimerRef = useRef(null);
+export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = false }) {
+  const teamA = state.teams?.[0] || {
+    name: 'TEAM A',
+    subtitle: '',
+    color: '#0d9f67',
+    textColor: '#ffffff',
+    logoUrl: '',
+    score: 0
+  };
+  const teamB = state.teams?.[1] || {
+    name: 'TEAM B',
+    subtitle: '',
+    color: '#d99b26',
+    textColor: '#091210',
+    logoUrl: '',
+    score: 0
+  };
 
-  useEffect(() => {
-    const engine = new SyncEngine((newState) => {
-      if (newState.fdnScore !== prevFdnRef.current) {
-        const diff = newState.fdnScore - prevFdnRef.current;
-        prevFdnRef.current = newState.fdnScore;
-        if (diff !== 0) {
-          setFdnDelta(diff);
-          if (fdnTimerRef.current) clearTimeout(fdnTimerRef.current);
-          fdnTimerRef.current = setTimeout(() => {
-            setFdnDelta(0);
-            fdnTimerRef.current = null;
-          }, 420);
-        }
-      }
-
-      if (newState.lauchangScore !== prevLauchangRef.current) {
-        const diff = newState.lauchangScore - prevLauchangRef.current;
-        prevLauchangRef.current = newState.lauchangScore;
-        if (diff !== 0) {
-          setLauchangDelta(diff);
-          if (lauchangTimerRef.current) clearTimeout(lauchangTimerRef.current);
-          lauchangTimerRef.current = setTimeout(() => {
-            setLauchangDelta(0);
-            lauchangTimerRef.current = null;
-          }, 420);
-        }
-      }
-
-      setState(newState);
-    });
-
-    return () => {
-      if (fdnTimerRef.current) clearTimeout(fdnTimerRef.current);
-      if (lauchangTimerRef.current) clearTimeout(lauchangTimerRef.current);
-      engine.destroy();
-    };
-  }, []);
-
-  const fdnDeltaLabel = formatScoreDelta(fdnDelta);
-  const lauchangDeltaLabel = formatScoreDelta(lauchangDelta);
+  const bestOf = Number(state.bestOf) || 0;
+  const winsNeeded = bestOf > 0 ? Math.ceil(bestOf / 2) : 0;
+  const deltaALabel = formatScoreDelta(deltaA);
+  const deltaBLabel = formatScoreDelta(deltaB);
+  const activeLabel = state.activeItem?.label || 'WAITING FOR SPIN';
 
   return (
-    <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 20 }}>
-      <div className="broadcast-3d-scoreboard">
-        <div className="broadcast-3d-main-bar">
-          <div className="broadcast-3d-team-card broadcast-3d-team-fdn">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <FdnLogo size={66} />
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5, lineHeight: 1, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                  FDN
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
-                  TEAM FEEDEN
-                </div>
+    <div className={`broadcast-3d-scoreboard ${compact ? 'broadcast-3d-compact' : ''}`}>
+      <div className="broadcast-3d-main-bar">
+        <div
+          className="broadcast-3d-team-card broadcast-3d-team-left"
+          style={{ backgroundColor: teamA.color, color: teamA.textColor }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 16, minWidth: 0 }}>
+            <TeamAvatar
+              name={teamA.name}
+              logoUrl={teamA.logoUrl}
+              color={teamA.color}
+              textColor={teamA.textColor}
+              size={compact ? 40 : 66}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: compact ? 17 : 28,
+                  fontWeight: 900,
+                  letterSpacing: -0.5,
+                  lineHeight: 1,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.35)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {teamA.name}
               </div>
-            </div>
-
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-              <AnimatePresence>
-                {fdnDeltaLabel && (
-                  <motion.div
-                    className="combat-float-text"
-                    initial={{ opacity: 0, y: 15, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -42, scale: 1.5 }}
-                    exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.36, ease: 'easeOut' }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      right: 0,
-                      zIndex: 9999,
-                      color: fdnDelta < 0 ? '#fca5a5' : '#ffffff'
-                    }}
-                  >
-                    {fdnDeltaLabel}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={state.fdnScore}
-                  className="broadcast-3d-score-number"
-                  initial={{ y: -25, opacity: 0, scale: 0.7 }}
-                  animate={{ y: 0, opacity: 1, scale: 1 }}
-                  exit={{ y: 25, opacity: 0, scale: 0.7 }}
-                  transition={{ type: 'spring', stiffness: 650, damping: 22 }}
-                >
-                  {state.fdnScore}
-                </motion.div>
-              </AnimatePresence>
+              {teamA.subtitle && (
+                <div style={{ fontSize: compact ? 10 : 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
+                  {teamA.subtitle}
+                </div>
+              )}
+              {winsNeeded > 0 && (
+                <div className="series-pips">
+                  {Array.from({ length: winsNeeded }).map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`series-pip ${idx < teamA.score ? 'series-pip-filled' : ''}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="broadcast-3d-divider">
-            <div className="broadcast-3d-vs">VS</div>
-          </div>
-
-          <div className="broadcast-3d-team-card broadcast-3d-team-lauchang">
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-              <AnimatePresence>
-                {lauchangDeltaLabel && (
-                  <motion.div
-                    className="combat-float-text"
-                    initial={{ opacity: 0, y: 15, scale: 0.5 }}
-                    animate={{ opacity: 1, y: -42, scale: 1.5 }}
-                    exit={{ opacity: 0, y: -65, scale: 1.1 }}
-                    transition={{ duration: 0.36, ease: 'easeOut' }}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      zIndex: 9999,
-                      color: lauchangDelta < 0 ? '#fca5a5' : '#ffffff'
-                    }}
-                  >
-                    {lauchangDeltaLabel}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <AnimatePresence mode="wait">
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+            <AnimatePresence>
+              {deltaALabel && (
                 <motion.div
-                  key={state.lauchangScore}
-                  className="broadcast-3d-score-number"
-                  initial={{ y: -25, opacity: 0, scale: 0.7 }}
-                  animate={{ y: 0, opacity: 1, scale: 1 }}
-                  exit={{ y: 25, opacity: 0, scale: 0.7 }}
-                  transition={{ type: 'spring', stiffness: 650, damping: 22 }}
+                  className="combat-float-text"
+                  initial={{ opacity: 0, y: 15, scale: 0.5 }}
+                  animate={{ opacity: 1, y: -42, scale: 1.5 }}
+                  exit={{ opacity: 0, y: -65, scale: 1.1 }}
+                  transition={{ duration: 0.36, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    zIndex: 9999,
+                    color: deltaA < 0 ? '#fca5a5' : '#ffffff'
+                  }}
                 >
-                  {state.lauchangScore}
+                  {deltaALabel}
                 </motion.div>
-              </AnimatePresence>
-            </div>
+              )}
+            </AnimatePresence>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, textAlign: 'right' }}>
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5, lineHeight: 1, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                  LAUCHANG
-                </div>
-                <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
-                  TEAM LAUTASHE
-                </div>
-              </div>
-              <LauchangLogo size={66} />
-            </div>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={teamA.score}
+                className="broadcast-3d-score-number"
+                initial={{ y: -25, opacity: 0, scale: 0.7 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 25, opacity: 0, scale: 0.7 }}
+                transition={{ type: 'spring', stiffness: 650, damping: 22 }}
+              >
+                {teamA.score}
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
 
-        <div className="broadcast-3d-bottom-wrapper">
-          <div className="broadcast-3d-bottom-bar">
-            <Gamepad2 size={20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
-            <span className="broadcast-3d-game-title">
-              {state.activeGame ? state.activeGame : 'ESPERANDO RULETA'}
-            </span>
+        <div className="broadcast-3d-divider">
+          <div className="broadcast-3d-vs">VS</div>
+          {bestOf > 0 && (
+            <span className="broadcast-3d-bo-tag">BO{bestOf}</span>
+          )}
+        </div>
+
+        <div
+          className="broadcast-3d-team-card broadcast-3d-team-right"
+          style={{ backgroundColor: teamB.color, color: teamB.textColor }}
+        >
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+            <AnimatePresence>
+              {deltaBLabel && (
+                <motion.div
+                  className="combat-float-text"
+                  initial={{ opacity: 0, y: 15, scale: 0.5 }}
+                  animate={{ opacity: 1, y: -42, scale: 1.5 }}
+                  exit={{ opacity: 0, y: -65, scale: 1.1 }}
+                  transition={{ duration: 0.36, ease: 'easeOut' }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    zIndex: 9999,
+                    color: deltaB < 0 ? '#fca5a5' : '#ffffff'
+                  }}
+                >
+                  {deltaBLabel}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={teamB.score}
+                className="broadcast-3d-score-number"
+                initial={{ y: -25, opacity: 0, scale: 0.7 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+                exit={{ y: 25, opacity: 0, scale: 0.7 }}
+                transition={{ type: 'spring', stiffness: 650, damping: 22 }}
+              >
+                {teamB.score}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 10 : 16, textAlign: 'right', minWidth: 0 }}>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: compact ? 17 : 28,
+                  fontWeight: 900,
+                  letterSpacing: -0.5,
+                  lineHeight: 1,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.35)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {teamB.name}
+              </div>
+              {teamB.subtitle && (
+                <div style={{ fontSize: compact ? 10 : 12, fontWeight: 800, opacity: 0.9, marginTop: 4, letterSpacing: 1 }}>
+                  {teamB.subtitle}
+                </div>
+              )}
+              {winsNeeded > 0 && (
+                <div className="series-pips series-pips-right">
+                  {Array.from({ length: winsNeeded }).map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`series-pip ${idx < teamB.score ? 'series-pip-filled' : ''}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <TeamAvatar
+              name={teamB.name}
+              logoUrl={teamB.logoUrl}
+              color={teamB.color}
+              textColor={teamB.textColor}
+              size={compact ? 40 : 66}
+            />
           </div>
         </div>
       </div>
+
+      <div className="broadcast-3d-bottom-wrapper">
+        <div className="broadcast-3d-bottom-bar">
+          <Gamepad2 size={compact ? 15 : 20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+          <span className="broadcast-3d-game-title" style={compact ? { fontSize: 13 } : undefined}>
+            {activeLabel}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ScoreboardOverlay({ roomId = DEFAULT_ROOM_ID }) {
+  const [state, setState] = useState(() => getInitialState(roomId));
+  const [deltaA, setDeltaA] = useState(0);
+  const [deltaB, setDeltaB] = useState(0);
+  const prevARef = useRef(state.teams?.[0]?.score || 0);
+  const prevBRef = useRef(state.teams?.[1]?.score || 0);
+  const timerARef = useRef(null);
+  const timerBRef = useRef(null);
+
+  useEffect(() => {
+    const initial = getInitialState(roomId);
+    setState(initial);
+    prevARef.current = initial.teams?.[0]?.score || 0;
+    prevBRef.current = initial.teams?.[1]?.score || 0;
+
+    const engine = new SyncEngine(
+      (newState) => {
+        const scoreA = newState.teams?.[0]?.score || 0;
+        const scoreB = newState.teams?.[1]?.score || 0;
+
+        if (scoreA !== prevARef.current) {
+          const diff = scoreA - prevARef.current;
+          prevARef.current = scoreA;
+          if (diff !== 0) {
+            setDeltaA(diff);
+            if (timerARef.current) clearTimeout(timerARef.current);
+            timerARef.current = setTimeout(() => {
+              setDeltaA(0);
+              timerARef.current = null;
+            }, 420);
+          }
+        }
+
+        if (scoreB !== prevBRef.current) {
+          const diff = scoreB - prevBRef.current;
+          prevBRef.current = scoreB;
+          if (diff !== 0) {
+            setDeltaB(diff);
+            if (timerBRef.current) clearTimeout(timerBRef.current);
+            timerBRef.current = setTimeout(() => {
+              setDeltaB(0);
+              timerBRef.current = null;
+            }, 420);
+          }
+        }
+
+        setState(newState);
+      },
+      { roomId }
+    );
+
+    return () => {
+      if (timerARef.current) clearTimeout(timerARef.current);
+      if (timerBRef.current) clearTimeout(timerBRef.current);
+      engine.destroy();
+    };
+  }, [roomId]);
+
+  return (
+    <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 20 }}>
+      <ScoreboardGraphic state={state} deltaA={deltaA} deltaB={deltaB} />
     </div>
   );
 }

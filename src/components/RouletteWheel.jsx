@@ -11,11 +11,14 @@ import {
   resolveSliceImage
 } from '../lib/wheel';
 import { playTickSound, playVictoryFanfare } from '../lib/audio';
+import { resolveOverlayTheme } from '../lib/themes';
 
 export default function RouletteWheel({
   items = [],
   teams = [],
   title = 'ARENAOBS',
+  theme = 'emerald-gold',
+  accentColor = '',
   spin = {},
   showWinnerModal = false,
   activeItem = null,
@@ -23,6 +26,7 @@ export default function RouletteWheel({
   onSpinEnd,
   size = 520
 }) {
+  const resolvedTheme = useMemo(() => resolveOverlayTheme(theme, accentColor), [theme, accentColor]);
   const canvasRef = useRef(null);
   const isSpinning = Boolean(spin.isSpinning);
   const wheelItems = Array.isArray(spin.wheelItems) && spin.wheelItems.length > 0 ? spin.wheelItems : items;
@@ -125,15 +129,15 @@ export default function RouletteWheel({
 
     ctx.beginPath();
     ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
-    ctx.fillStyle = '#080d0b';
+    ctx.fillStyle = resolvedTheme.outerRingBg;
     ctx.fill();
-    ctx.strokeStyle = '#1e2b27';
+    ctx.strokeStyle = resolvedTheme.innerBorderColor;
     ctx.lineWidth = 18;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(0, 0, outerRadius + 8, 0, Math.PI * 2);
-    ctx.strokeStyle = '#d99b26';
+    ctx.strokeStyle = resolvedTheme.rimColor;
     ctx.lineWidth = 3;
     ctx.stroke();
 
@@ -145,16 +149,18 @@ export default function RouletteWheel({
 
       ctx.beginPath();
       ctx.arc(px, py, Math.max(3, size * 0.0095), 0, Math.PI * 2);
-      ctx.fillStyle = '#d99b26';
+      ctx.fillStyle = resolvedTheme.pinColor;
       ctx.fill();
-      ctx.strokeStyle = '#080d0b';
+      ctx.strokeStyle = resolvedTheme.outerRingBg;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
 
     sliceLayout.forEach((slice, i) => {
       const entry = slice.item;
-      const label = typeof entry === 'string' ? entry : String(entry?.label || '');
+      const rawLabel = typeof entry === 'string' ? entry : String(entry?.label || '');
+      const iconPrefix = typeof entry === 'object' && entry?.icon ? `${entry.icon} ` : '';
+      const label = `${iconPrefix}${rawLabel}`.trim();
       const sliceColor = (typeof entry === 'object' && entry?.color) || SLICE_COLORS[i % SLICE_COLORS.length];
       const startAngle = (slice.startDeg * Math.PI) / 180;
       const endAngle = (slice.endDeg * Math.PI) / 180;
@@ -250,7 +256,7 @@ export default function RouletteWheel({
     });
 
     ctx.restore();
-  }, [sliceLayout, rotation, size, loadedImages]);
+  }, [sliceLayout, rotation, size, loadedImages, resolvedTheme]);
 
   useEffect(() => {
     if (!isSpinning || winningIndex === null || winningIndex < 0 || displayedItems.length === 0 || !spinSeed) {
@@ -339,8 +345,11 @@ export default function RouletteWheel({
   const teamB = teams[1] || { name: 'TEAM B', color: '#d99b26', textColor: '#091210', logoUrl: '' };
 
   return (
-    <div className="roulette-wrapper">
-      <div className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`} />
+    <div className="roulette-wrapper" style={resolvedTheme.cssVars}>
+      <div
+        className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`}
+        style={{ borderTopColor: resolvedTheme.rimColor }}
+      />
 
       <canvas
         ref={canvasRef}
@@ -349,11 +358,20 @@ export default function RouletteWheel({
         style={{ width: `${size}px`, height: `${size}px` }}
       />
 
-      <div className="roulette-center-hub" style={{ width: hubSize, height: hubSize }}>
+      <div
+        className="roulette-center-hub"
+        style={{
+          width: hubSize,
+          height: hubSize,
+          backgroundColor: resolvedTheme.hubBg,
+          borderColor: resolvedTheme.rimColor
+        }}
+      >
         <div className={`hub-logo-slot ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}>
           <TeamAvatar
             name={teamA.name}
             logoUrl={teamA.logoUrl}
+            icon={teamA.icon}
             color={teamA.color}
             textColor={teamA.textColor}
             size={avatarSize}
@@ -363,6 +381,7 @@ export default function RouletteWheel({
           <TeamAvatar
             name={teamB.name}
             logoUrl={teamB.logoUrl}
+            icon={teamB.icon}
             color={teamB.color}
             textColor={teamB.textColor}
             size={avatarSize}
@@ -372,11 +391,18 @@ export default function RouletteWheel({
 
       {showWinnerModal && winnerLabel && (
         <div className="winner-overlay-modal animate-pop">
-          <div className="winner-card">
-            <h1 style={{ fontSize: Math.max(20, Math.round(size * 0.062)), fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
-              {winnerLabel}
+          <div
+            className="winner-card"
+            style={{
+              backgroundColor: resolvedTheme.cardBg,
+              borderColor: resolvedTheme.rimColor,
+              color: resolvedTheme.textColor
+            }}
+          >
+            <h1 style={{ fontSize: Math.max(20, Math.round(size * 0.062)), fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+              {activeItem?.icon ? `${activeItem.icon} ` : ''}{winnerLabel}
             </h1>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 0, fontWeight: 700 }}>
+            <p style={{ fontSize: 13, color: resolvedTheme.mutedColor, marginBottom: 0, fontWeight: 700 }}>
               {title}
             </p>
           </div>

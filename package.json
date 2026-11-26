@@ -12,6 +12,7 @@
   "dependencies": {
     "@ui-sdk/core": "^0.1.0-beta.17",
     "@ui-sdk/react": "^0.1.0-beta.17",
+    "@vercel/blob": "^2.9.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^13.1.0",
     "lucide-react": "^0.469.0",

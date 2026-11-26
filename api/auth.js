@@ -69,7 +69,8 @@ export default async function handler(req, res) {
   }
 
   clearLoginRateLimit(rateKey);
-  const signed = signRoomToken(roomId);
+  const tokenVersion = typeof roomMeta?.tokenVersion === 'number' ? roomMeta.tokenVersion : 1;
+  const signed = signRoomToken(roomId, { tokenVersion });
   return res.status(200).json({
     success: true,
     token: signed.token,

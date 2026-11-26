@@ -26,6 +26,7 @@ import {
   getRoomUrls,
   getTokenStorageKey,
   parseBulkSegments,
+  parseImportedRoomConfig,
   pickContrastingTextColor,
   sanitizeMediaUrl
 } from '../lib/roomSchema';
@@ -100,6 +101,27 @@ export default function Hub() {
     setBulkText('');
     setShowBulkPaste(false);
     toast.success(`Imported ${parsed.length} segments`);
+  };
+
+  const handleImportRoomJson = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = parseImportedRoomConfig(String(reader.result || ''), customRoomId || 'imported-room');
+        setTitle(imported.title);
+        setMode(imported.mode);
+        setDrawMode(imported.drawMode);
+        setTheme(imported.theme);
+        setBestOf(imported.bestOf);
+        setTeams(imported.teams);
+        setItems(imported.items);
+        toast.success('Loaded room template JSON');
+      } catch {
+        toast.error('Invalid room JSON file');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const updateTeamField = (index, field, value) => {
@@ -381,9 +403,24 @@ export default function Hub() {
                     {t('createRoomSubtitle')}
                   </p>
                 </div>
-                <button type="submit" className="btn-white" disabled={isCreating} style={{ padding: '12px 24px' }}>
-                  {isCreating ? t('creatingRoom') : t('launchRoom')} <ArrowRight size={16} />
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label className="btn-secondary" style={{ padding: '10px 14px', cursor: 'pointer' }}>
+                    Import JSON
+                    <input
+                      type="file"
+                      accept="application/json,.json"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = '';
+                        handleImportRoomJson(file);
+                      }}
+                    />
+                  </label>
+                  <button type="submit" className="btn-white" disabled={isCreating} style={{ padding: '12px 24px' }}>
+                    {isCreating ? t('creatingRoom') : t('launchRoom')} <ArrowRight size={16} />
+                  </button>
+                </div>
               </div>
 
               <div className="studio-form-row" style={{ marginBottom: 22 }}>

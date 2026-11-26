@@ -100,8 +100,12 @@ export function signRoomToken(roomId, options = {}) {
   }
   const now = typeof options.now === 'number' ? options.now : Date.now();
   const ttlMs = typeof options.ttlMs === 'number' ? options.ttlMs : TOKEN_TTL_MS;
+  const tokenVersion = typeof options.tokenVersion === 'number' && options.tokenVersion >= 1
+    ? Math.floor(options.tokenVersion)
+    : 1;
   const payload = {
     roomId,
+    v: tokenVersion,
     iat: now,
     exp: now + ttlMs
   };
@@ -110,6 +114,7 @@ export function signRoomToken(roomId, options = {}) {
   return {
     token: `${encodedPayload}.${signature}`,
     roomId: payload.roomId,
+    tokenVersion: payload.v,
     iat: payload.iat,
     exp: payload.exp
   };
@@ -155,9 +160,19 @@ export function verifyRoomToken(token, options = {}) {
     return { valid: false, reason: 'ROOM_MISMATCH', status: 403 };
   }
 
+  const tokenVersion = typeof payload.v === 'number' ? payload.v : 1;
+  if (
+    typeof options.expectedTokenVersion === 'number' &&
+    options.expectedTokenVersion >= 1 &&
+    tokenVersion !== options.expectedTokenVersion
+  ) {
+    return { valid: false, reason: 'SESSION_REVOKED', status: 401 };
+  }
+
   return {
     valid: true,
     roomId: payload.roomId,
+    tokenVersion,
     iat: payload.iat,
     exp: payload.exp,
     status: 200

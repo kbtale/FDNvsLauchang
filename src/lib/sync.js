@@ -3,6 +3,7 @@ import {
   fixLegacyGameName,
   normalizeRoomState
 } from './roomSchema';
+import { computeAdaptivePollIntervalMs } from './timer';
 
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
 const SYNC_API_ENDPOINT = '/api/sync';
@@ -49,8 +50,12 @@ export class SyncEngine {
     this.channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
       ? new BroadcastChannel(getChannelName(this.roomId))
       : null;
-    this.pollInterval = null;
+    this.pollTimeout = null;
+    this.destroyed = false;
     this.lastEtag = null;
+    this.isSpinning = false;
+    this.timerRunning = false;
+    this.lastActivityAt = Date.now();
     this.clientId = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : Math.random().toString(36).substring(2);
@@ -58,6 +63,8 @@ export class SyncEngine {
     const initial = getInitialState(this.roomId);
     this.lastUpdatedAt = initial.updatedAt || 0;
     this.lastStateHash = this.computeHash(initial);
+    this.isSpinning = Boolean(initial.spin?.isSpinning);
+    this.timerRunning = Boolean(initial.timer?.running);
 
     this.handleMessage = (event) => {
       if (event.data && typeof event.data === 'object') {
@@ -102,12 +109,16 @@ export class SyncEngine {
     }
 
     const normalized = normalizeRoomState(payload, this.roomId);
+    this.isSpinning = Boolean(normalized.spin?.isSpinning);
+    this.timerRunning = Boolean(normalized.timer?.running);
+
     const hash = this.computeHash(normalized);
     if (hash === this.lastStateHash) {
       this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
       return;
     }
 
+    this.lastActivityAt = Date.now();
     this.lastStateHash = hash;
     this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
     const finalState = { ...normalized, updatedAt: this.lastUpdatedAt };
@@ -121,57 +132,78 @@ export class SyncEngine {
     }
   }
 
-  initCloudPolling() {
-    const fetchLatest = () => {
-      if (typeof fetch === 'undefined') return;
-      const roomParam = encodeURIComponent(this.roomId);
-      const headers = { Pragma: 'no-cache', 'Cache-Control': 'no-cache' };
-      if (this.lastEtag) {
-        headers['If-None-Match'] = this.lastEtag;
-      }
+  scheduleNextPoll() {
+    if (this.destroyed) return;
+    if (this.pollTimeout) {
+      clearTimeout(this.pollTimeout);
+    }
+    const delayMs = computeAdaptivePollIntervalMs({
+      isSpinning: this.isSpinning,
+      timerRunning: this.timerRunning,
+      lastActivityAt: this.lastActivityAt,
+      now: Date.now()
+    });
+    this.pollTimeout = setTimeout(() => {
+      this.pollOnce();
+    }, delayMs);
+  }
 
-      fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}&_t=${Date.now()}`, {
-        cache: 'no-store',
-        headers
+  pollOnce() {
+    if (this.destroyed || typeof fetch === 'undefined') return;
+    const roomParam = encodeURIComponent(this.roomId);
+    const headers = { Pragma: 'no-cache', 'Cache-Control': 'no-cache' };
+    if (this.lastEtag) {
+      headers['If-None-Match'] = this.lastEtag;
+    }
+
+    fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}&_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers
+    })
+      .then(async (res) => {
+        const persistence = res.headers?.get?.('x-arenaobs-persistence') || null;
+        const etag = res.headers?.get?.('etag') || null;
+        if (etag) {
+          this.lastEtag = etag;
+        }
+        if (this.onMetaUpdate) {
+          this.onMetaUpdate({ connected: res.ok || res.status === 304, persistence });
+        }
+        if (res.status === 304 || !res.ok) {
+          return;
+        }
+        const data = await res.json();
+        if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+          this.processIncomingPayload(data, true);
+        }
       })
-        .then(async (res) => {
-          const persistence = res.headers?.get?.('x-arenaobs-persistence') || null;
-          const etag = res.headers?.get?.('etag') || null;
-          if (etag) {
-            this.lastEtag = etag;
-          }
-          if (this.onMetaUpdate) {
-            this.onMetaUpdate({ connected: res.ok || res.status === 304, persistence });
-          }
-          if (res.status === 304 || !res.ok) {
-            return;
-          }
-          const data = await res.json();
-          if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-            this.processIncomingPayload(data, true);
-          }
-        })
-        .catch(() => {
-          if (this.onMetaUpdate) {
-            this.onMetaUpdate({ connected: false, persistence: null });
-          }
-        });
-    };
+      .catch(() => {
+        if (this.onMetaUpdate) {
+          this.onMetaUpdate({ connected: false, persistence: null });
+        }
+      })
+      .finally(() => {
+        this.scheduleNextPoll();
+      });
+  }
 
-    fetchLatest();
-    this.pollInterval = setInterval(fetchLatest, 800);
+  initCloudPolling() {
+    this.pollOnce();
   }
 
   broadcast(state) {
     const now = Date.now();
     const newTimestamp = Math.max(now, this.lastUpdatedAt + 1);
     this.lastUpdatedAt = newTimestamp;
+    this.lastActivityAt = now;
 
     const normalized = normalizeRoomState(
       { ...state, roomId: this.roomId, updatedAt: newTimestamp },
       this.roomId
     );
     normalized.updatedAt = newTimestamp;
+    this.isSpinning = Boolean(normalized.spin?.isSpinning);
+    this.timerRunning = Boolean(normalized.timer?.running);
 
     this.lastStateHash = this.computeHash(normalized);
     this.lastEtag = null;
@@ -221,11 +253,13 @@ export class SyncEngine {
   }
 
   destroy() {
+    this.destroyed = true;
     if (this.channel) {
       this.channel.close();
     }
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
+    if (this.pollTimeout) {
+      clearTimeout(this.pollTimeout);
+      this.pollTimeout = null;
     }
     if (typeof window !== 'undefined') {
       window.removeEventListener('storage', this.handleStorage);

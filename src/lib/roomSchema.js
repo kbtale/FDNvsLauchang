@@ -1,5 +1,6 @@
 import { BUILTIN_GAME_IMAGES, DEFAULT_SPIN_DURATION_MS, SLICE_COLORS } from './wheel.js';
 import { OVERLAY_THEMES } from './themes.js';
+import { DEFAULT_TIMER } from './timer.js';
 
 export const DEFAULT_ROOM_ID = 'fdn-vs-lauchang';
 export const EVENT_MODES = ['versus', 'leaderboard', 'wheel-only'];
@@ -448,6 +449,91 @@ function normalizeTeamsList(rawTeams, fallbackTeams, mode) {
   return normalized;
 }
 
+function normalizeTimer(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { ...DEFAULT_TIMER };
+  }
+  const durationMs = typeof raw.durationMs === 'number' && Number.isFinite(raw.durationMs)
+    ? Math.max(5_000, Math.min(3_600_000, Math.round(raw.durationMs)))
+    : DEFAULT_TIMER.durationMs;
+  const remainingMs = typeof raw.remainingMs === 'number' && Number.isFinite(raw.remainingMs)
+    ? Math.max(0, Math.min(3_600_000, Math.round(raw.remainingMs)))
+    : durationMs;
+  return {
+    running: Boolean(raw.running),
+    startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : 0,
+    durationMs,
+    remainingMs,
+    visible: Boolean(raw.visible),
+    label: typeof raw.label === 'string' && raw.label.trim()
+      ? raw.label.trim().toUpperCase().slice(0, 32)
+      : DEFAULT_TIMER.label
+  };
+}
+
+function normalizeAnnouncement(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { visible: false, text: '' };
+  }
+  return {
+    visible: Boolean(raw.visible),
+    text: typeof raw.text === 'string' ? raw.text.trim().slice(0, 140) : ''
+  };
+}
+
+export function exportRoomConfig(state) {
+  return {
+    version: 2,
+    title: state.title,
+    mode: state.mode,
+    drawMode: state.drawMode,
+    theme: state.theme,
+    accentColor: state.accentColor || '',
+    bestOf: state.bestOf || 0,
+    soundEnabled: state.soundEnabled !== false,
+    teams: (state.teams || []).map((tm) => ({
+      id: tm.id,
+      name: tm.name,
+      subtitle: tm.subtitle,
+      color: tm.color,
+      textColor: tm.textColor,
+      logoUrl: tm.logoUrl || '',
+      icon: tm.icon || '',
+      score: 0
+    })),
+    items: (state.items || []).map((it) => ({
+      id: it.id,
+      label: it.label,
+      icon: it.icon || '',
+      color: it.color,
+      imageUrl: it.imageUrl || '',
+      weight: it.weight || 1
+    }))
+  };
+}
+
+export function parseImportedRoomConfig(rawJson, roomId = DEFAULT_ROOM_ID) {
+  const parsed = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid room config JSON');
+  }
+  const normalized = normalizeRoomState(parsed, roomId);
+  return {
+    ...normalized,
+    spin: {
+      isSpinning: false,
+      spinSeed: 0,
+      spinStartedAt: 0,
+      spinDurationMs: DEFAULT_SPIN_DURATION_MS,
+      startRotation: 0,
+      targetRotation: 0,
+      winningIndex: null,
+      wheelItems: []
+    },
+    showWinnerModal: false
+  };
+}
+
 export function createPresetRoomState(presetId = 'versus-match', overrides = {}) {
   const preset = ALL_PRESETS.find((p) => p.id === presetId) || ROOM_PRESETS[0];
   const roomId = overrides.roomId || preset.id;
@@ -489,6 +575,8 @@ export function createPresetRoomState(presetId = 'versus-match', overrides = {})
     activeItem: null,
     history: [],
     soundEnabled: overrides.soundEnabled !== false,
+    timer: normalizeTimer(overrides.timer),
+    announcement: normalizeAnnouncement(overrides.announcement),
     spin: {
       isSpinning: false,
       spinSeed: 0,
@@ -623,6 +711,8 @@ export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
     activeItem,
     history,
     soundEnabled: raw.soundEnabled !== false,
+    timer: normalizeTimer(raw.timer),
+    announcement: normalizeAnnouncement(raw.announcement),
     spin,
     showWinnerModal: Boolean(raw.showWinnerModal),
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : 0

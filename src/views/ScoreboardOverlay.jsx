@@ -4,6 +4,7 @@ import { DEFAULT_ROOM_ID, sortLeaderboardTeams } from '../lib/roomSchema';
 import { formatScoreDelta } from '../lib/wheel';
 import { resolveOverlayTheme } from '../lib/themes';
 import TeamAvatar from '../components/TeamAvatar';
+import { AnnouncementTicker, CountdownBadge } from '../components/CountdownBadge';
 import { Gamepad2, Sparkles, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,14 +20,18 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
 
   if (mode === 'wheel-only') {
     return (
-      <div className={`broadcast-wheel-banner ${compact ? 'broadcast-3d-compact' : ''}`} style={resolvedTheme.cssVars}>
-        <div className="broadcast-wheel-banner-top">
-          <Sparkles size={compact ? 14 : 18} color={resolvedTheme.rimColor} />
-          <span>{state.title}</span>
+      <div className="broadcast-stack" style={resolvedTheme.cssVars}>
+        <CountdownBadge timer={state.timer} compact={compact} />
+        <div className={`broadcast-wheel-banner ${compact ? 'broadcast-3d-compact' : ''}`}>
+          <div className="broadcast-wheel-banner-top">
+            <Sparkles size={compact ? 14 : 18} color={resolvedTheme.rimColor} />
+            <span>{state.title}</span>
+          </div>
+          <div className="broadcast-wheel-banner-main">
+            {activeLabel}
+          </div>
         </div>
-        <div className="broadcast-wheel-banner-main">
-          {activeLabel}
-        </div>
+        <AnnouncementTicker announcement={state.announcement} compact={compact} />
       </div>
     );
   }
@@ -34,40 +39,44 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
   if (mode === 'leaderboard') {
     const ranked = sortLeaderboardTeams(state.teams || []);
     return (
-      <div className={`broadcast-leaderboard ${compact ? 'broadcast-leaderboard-compact' : ''}`} style={resolvedTheme.cssVars}>
-        <div className="broadcast-leaderboard-header">
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <Trophy size={compact ? 15 : 18} color={resolvedTheme.rimColor} />
-            {state.title}
-          </span>
-          <span className="broadcast-leaderboard-active">{activeLabel}</span>
-        </div>
-        <div className="broadcast-leaderboard-rows">
-          {ranked.map((team) => (
-            <div
-              key={team.id}
-              className="broadcast-leaderboard-row"
-              style={{ borderLeft: `5px solid ${team.color}` }}
-            >
-              <span className={`leaderboard-rank ${team.rank === 1 ? 'leaderboard-rank-gold' : ''}`}>
-                #{team.rank}
-              </span>
-              <TeamAvatar
-                name={team.name}
-                logoUrl={team.logoUrl}
-                icon={team.icon}
-                color={team.color}
-                textColor={team.textColor}
-                size={compact ? 30 : 40}
-              />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div className="leaderboard-name">{team.name}</div>
-                {team.subtitle && <div className="leaderboard-sub">{team.subtitle}</div>}
+      <div className="broadcast-stack" style={resolvedTheme.cssVars}>
+        <CountdownBadge timer={state.timer} compact={compact} />
+        <div className={`broadcast-leaderboard ${compact ? 'broadcast-leaderboard-compact' : ''}`}>
+          <div className="broadcast-leaderboard-header">
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Trophy size={compact ? 15 : 18} color={resolvedTheme.rimColor} />
+              {state.title}
+            </span>
+            <span className="broadcast-leaderboard-active">{activeLabel}</span>
+          </div>
+          <div className="broadcast-leaderboard-rows">
+            {ranked.map((team) => (
+              <div
+                key={team.id}
+                className="broadcast-leaderboard-row"
+                style={{ borderLeft: `5px solid ${team.color}` }}
+              >
+                <span className={`leaderboard-rank ${team.rank === 1 ? 'leaderboard-rank-gold' : ''}`}>
+                  #{team.rank}
+                </span>
+                <TeamAvatar
+                  name={team.name}
+                  logoUrl={team.logoUrl}
+                  icon={team.icon}
+                  color={team.color}
+                  textColor={team.textColor}
+                  size={compact ? 30 : 40}
+                />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="leaderboard-name">{team.name}</div>
+                  {team.subtitle && <div className="leaderboard-sub">{team.subtitle}</div>}
+                </div>
+                <div className="leaderboard-score">{team.score}</div>
               </div>
-              <div className="leaderboard-score">{team.score}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
+        <AnnouncementTicker announcement={state.announcement} compact={compact} />
       </div>
     );
   }
@@ -278,6 +287,11 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
             {activeLabel}
           </span>
         </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 10 }}>
+        <CountdownBadge timer={state.timer} compact={compact} />
+        <AnnouncementTicker announcement={state.announcement} compact={compact} />
       </div>
     </div>
   );

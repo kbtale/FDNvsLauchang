@@ -17,12 +17,15 @@ import {
   MAX_LEADERBOARD_TEAMS,
   MAX_SEGMENTS,
   createPresetRoomState,
+  exportRoomConfig,
   getRoomUrls,
   getTokenStorageKey,
   parseBulkSegments,
+  parseImportedRoomConfig,
   pickContrastingTextColor,
   sanitizeMediaUrl
 } from '../lib/roomSchema';
+import { computeRemainingTimerMs, formatCountdown } from '../lib/timer';
 import {
   DEFAULT_SPIN_DURATION_MS,
   SLICE_COLORS,
@@ -61,7 +64,12 @@ import {
   Languages,
   Database,
   Keyboard,
-  Upload
+  Upload,
+  Clock,
+  Pause,
+  Megaphone,
+  Download,
+  ShieldAlert
 } from 'lucide-react';
 
 const LEGACY_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
@@ -95,6 +103,9 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
   const [isUploading, setIsUploading] = useState(false);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [isUpdatingSecurity, setIsUpdatingSecurity] = useState(false);
+  const [timerTickNow, setTimerTickNow] = useState(() => Date.now());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -520,6 +531,150 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
     });
   };
 
+  useEffect(() => {
+    if (!state.timer?.running) return undefined;
+    const interval = setInterval(() => {
+      setTimerTickNow(Date.now());
+    }, 250);
+    return () => clearInterval(interval);
+  }, [state.timer?.running]);
+
+  const setTimerPreset = (seconds) => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    const durationMs = seconds * 1000;
+    syncEngine.broadcast({
+      ...latest,
+      timer: {
+        ...latest.timer,
+        running: false,
+        startedAt: 0,
+        durationMs,
+        remainingMs: durationMs,
+        visible: true
+      }
+    });
+  };
+
+  const toggleTimerRunning = () => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    const currentTimer = latest.timer;
+    const now = Date.now();
+    if (currentTimer.running) {
+      const rem = computeRemainingTimerMs(currentTimer, now);
+      syncEngine.broadcast({
+        ...latest,
+        timer: {
+          ...currentTimer,
+          running: false,
+          startedAt: 0,
+          remainingMs: rem
+        }
+      });
+    } else {
+      const rem = currentTimer.remainingMs > 0 ? currentTimer.remainingMs : currentTimer.durationMs;
+      syncEngine.broadcast({
+        ...latest,
+        timer: {
+          ...currentTimer,
+          running: true,
+          startedAt: now,
+          remainingMs: rem,
+          visible: true
+        }
+      });
+    }
+  };
+
+  const resetTimer = () => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    syncEngine.broadcast({
+      ...latest,
+      timer: {
+        ...latest.timer,
+        running: false,
+        startedAt: 0,
+        remainingMs: latest.timer.durationMs
+      }
+    });
+  };
+
+  const handleExportConfig = () => {
+    const config = exportRoomConfig(stateRef.current);
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${roomId}-arenaobs.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Exported room JSON');
+  };
+
+  const handleImportConfig = (file) => {
+    if (!file || !syncEngine) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = parseImportedRoomConfig(String(reader.result || ''), roomId);
+        pushUndoSnapshot(stateRef.current);
+        syncEngine.broadcast({
+          ...stateRef.current,
+          title: imported.title,
+          mode: imported.mode,
+          drawMode: imported.drawMode,
+          theme: imported.theme,
+          accentColor: imported.accentColor,
+          bestOf: imported.bestOf,
+          teams: imported.teams,
+          items: imported.items,
+          drawnItems: []
+        });
+        toast.success('Imported room configuration');
+      } catch {
+        toast.error('Invalid room JSON file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleSecurityAction = async (action) => {
+    const token = readStoredToken(roomId);
+    if (!token) return;
+    if (action === 'rotate-pin' && newPinInput.trim().length < 4) {
+      toast.error('New PIN must be at least 4 characters');
+      return;
+    }
+    setIsUpdatingSecurity(true);
+    try {
+      const res = await fetch(`/api/room-security?room=${encodeURIComponent(roomId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          action,
+          newPassword: action === 'rotate-pin' ? newPinInput.trim() : undefined
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.token) {
+        toast.error(data.error || 'Security update failed');
+      } else {
+        sessionStorage.setItem(getTokenStorageKey(roomId), data.token);
+        setNewPinInput('');
+        toast.success(action === 'rotate-pin' ? 'Room PIN rotated & old sessions revoked' : 'All other sessions revoked');
+      }
+    } catch {
+      toast.error('Failed to reach security endpoint');
+    } finally {
+      setIsUpdatingSecurity(false);
+    }
+  };
+
   const updateRoomSetting = (patch) => {
     if (!syncEngine) return;
     syncEngine.broadcast({
@@ -843,7 +998,7 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                 </div>
 
                 {state.activeItem && (
-                  <div style={{ padding: 16, backgroundColor: 'var(--panel-surface)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ padding: 16, backgroundColor: 'var(--panel-surface)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                     <div>
                       <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>{t('activeSegment')}</span>
                       <h3 style={{ fontSize: 22, fontWeight: 900 }}>{state.activeItem.label}</h3>
@@ -857,6 +1012,71 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                     )}
                   </div>
                 )}
+
+                <div className="card-panel-active" style={{ padding: 16, marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                    <strong style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      <Clock size={16} color="var(--accent-gold)" /> Countdown Timer · {formatCountdown(computeRemainingTimerMs(state.timer, timerTickNow))}
+                    </strong>
+                    <label className="studio-switch-label" style={{ padding: '4px 10px', fontSize: 12 }}>
+                      <span>Show on Overlay</span>
+                      <Switch
+                        className="studio-switch"
+                        checked={Boolean(state.timer?.visible)}
+                        onCheckedChange={(checked) => updateRoomSetting({ timer: { ...state.timer, visible: checked } })}
+                      >
+                        <SwitchThumb className="studio-switch-thumb" />
+                      </Switch>
+                    </label>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {[30, 60, 120, 300].map((sec) => (
+                      <button key={sec} type="button" className="btn-secondary" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => setTimerPreset(sec)}>
+                        {sec < 60 ? `${sec}s` : `${sec / 60}m`}
+                      </button>
+                    ))}
+                    <button type="button" className="btn-white" style={{ padding: '6px 14px', fontSize: 12.5, marginLeft: 'auto' }} onClick={toggleTimerRunning}>
+                      {state.timer?.running ? <><Pause size={13} /> Pause</> : <><Play size={13} /> Start</>}
+                    </button>
+                    <button type="button" className="btn-secondary" style={{ padding: '6px 10px', fontSize: 12 }} onClick={resetTimer} aria-label="Reset timer">
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    className="studio-input"
+                    placeholder="Timer label (e.g. ROUND TIMER)"
+                    value={state.timer?.label || ''}
+                    onChange={(e) => updateRoomSetting({ timer: { ...state.timer, label: e.target.value } })}
+                    maxLength={32}
+                  />
+                </div>
+
+                <div className="card-panel-active" style={{ padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                    <strong style={{ fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      <Megaphone size={16} color="var(--accent-gold)" /> Lower-Third Announcement
+                    </strong>
+                    <label className="studio-switch-label" style={{ padding: '4px 10px', fontSize: 12 }}>
+                      <span>Visible</span>
+                      <Switch
+                        className="studio-switch"
+                        checked={Boolean(state.announcement?.visible)}
+                        onCheckedChange={(checked) => updateRoomSetting({ announcement: { ...state.announcement, visible: checked } })}
+                      >
+                        <SwitchThumb className="studio-switch-thumb" />
+                      </Switch>
+                    </label>
+                  </div>
+                  <input
+                    type="text"
+                    className="studio-input"
+                    placeholder="Live sponsor message, next round info, or callout..."
+                    value={state.announcement?.text || ''}
+                    onChange={(e) => updateRoomSetting({ announcement: { ...state.announcement, text: e.target.value } })}
+                    maxLength={140}
+                  />
+                </div>
               </div>
 
               <div className="card-panel">
@@ -1364,6 +1584,68 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="responsive-grid-2" style={{ marginTop: 22 }}>
+                <div className="card-panel-active" style={{ padding: 18 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 900, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Download size={16} color="var(--accent-gold)" /> Backup & Reuse Template
+                  </h3>
+                  <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14 }}>
+                    Export this room&apos;s teams, theme, and segments as JSON or load a saved template.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn-secondary" onClick={handleExportConfig}>
+                      <Download size={14} /> Export JSON
+                    </button>
+                    <label className="btn-secondary" style={{ cursor: 'pointer' }}>
+                      <Upload size={14} /> Import JSON
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          handleImportConfig(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="card-panel-active" style={{ padding: 18 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 900, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ShieldAlert size={16} color="var(--accent-gold)" /> Room Security
+                  </h3>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <input
+                      type="password"
+                      className="studio-input"
+                      placeholder="New room PIN (min 4 chars)..."
+                      value={newPinInput}
+                      onChange={(e) => setNewPinInput(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-white"
+                      disabled={isUpdatingSecurity}
+                      onClick={() => handleSecurityAction('rotate-pin')}
+                    >
+                      Rotate PIN
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ width: '100%' }}
+                    disabled={isUpdatingSecurity}
+                    onClick={() => handleSecurityAction('revoke')}
+                  >
+                    Revoke All Other Active Sessions
+                  </button>
+                </div>
               </div>
             </div>
           </TabsPanel>

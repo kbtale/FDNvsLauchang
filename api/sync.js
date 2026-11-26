@@ -7,6 +7,7 @@ import {
 } from './_lib/auth.js';
 import {
   getPersistenceMode,
+  getRoomMeta,
   getRoomState,
   setRoomState
 } from './_lib/store.js';
@@ -61,7 +62,9 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Authorization token required' });
     }
 
-    const verification = verifyRoomToken(token, { expectedRoomId: roomId });
+    const roomMeta = await getRoomMeta(roomId);
+    const expectedTokenVersion = typeof roomMeta?.tokenVersion === 'number' ? roomMeta.tokenVersion : undefined;
+    const verification = verifyRoomToken(token, { expectedRoomId: roomId, expectedTokenVersion });
     if (!verification.valid) {
       return res.status(verification.status).json({ error: verification.reason });
     }

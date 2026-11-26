@@ -6,6 +6,7 @@ import {
   normalizeRoomId,
   verifyRoomToken
 } from './_lib/auth.js';
+import { getRoomMeta } from './_lib/store.js';
 
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const MIME_TO_EXT = {
@@ -72,7 +73,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Authorization token required' });
   }
 
-  const verification = verifyRoomToken(token, { expectedRoomId: roomId });
+  const roomMeta = await getRoomMeta(roomId);
+  const expectedTokenVersion = typeof roomMeta?.tokenVersion === 'number' ? roomMeta.tokenVersion : undefined;
+  const verification = verifyRoomToken(token, { expectedRoomId: roomId, expectedTokenVersion });
   if (!verification.valid) {
     return res.status(verification.status).json({ error: verification.reason });
   }

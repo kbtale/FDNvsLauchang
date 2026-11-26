@@ -19,12 +19,14 @@ describe('Routing & Streamer Shortcuts', () => {
     expect(getRoomUrls(DEFAULT_ROOM_ID, true)).toEqual({
       control: '/control',
       roulette: '/roulette',
-      scoreboard: '/scoreboard'
+      scoreboard: '/scoreboard',
+      stage: '/stage'
     });
     expect(getRoomUrls('my-cup', false)).toEqual({
       control: '/room/my-cup/control',
       roulette: '/room/my-cup/roulette',
-      scoreboard: '/room/my-cup/scoreboard'
+      scoreboard: '/room/my-cup/scoreboard',
+      stage: '/room/my-cup/stage'
     });
   });
 

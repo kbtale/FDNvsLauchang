@@ -1,7 +1,23 @@
 import { BUILTIN_GAME_IMAGES, DEFAULT_SPIN_DURATION_MS, SLICE_COLORS } from './wheel.js';
 
 export const DEFAULT_ROOM_ID = 'fdn-vs-lauchang';
+export const EVENT_MODES = ['versus', 'leaderboard', 'wheel-only'];
+export const DRAW_MODES = ['eliminate', 'keep'];
+export const MAX_SEGMENTS = 64;
+export const MAX_LEADERBOARD_TEAMS = 8;
+
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+const TEAM_PALETTE = [
+  '#2563eb',
+  '#e11d48',
+  '#0d9f67',
+  '#d99b26',
+  '#7c3aed',
+  '#0891b2',
+  '#ea580c',
+  '#db2777'
+];
 
 export function sanitizeHexColor(value, fallback = '#0d9f67') {
   if (typeof value !== 'string') {
@@ -72,11 +88,71 @@ export function getTeamMonogram(name) {
   return clean.slice(0, 2) || 'TM';
 }
 
+export function normalizeEventMode(raw, fallback = 'versus') {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return EVENT_MODES.includes(value) ? value : fallback;
+}
+
+export function normalizeDrawMode(raw, fallback = 'eliminate') {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return DRAW_MODES.includes(value) ? value : fallback;
+}
+
+export function parseBulkSegments(rawText, startIndex = 0) {
+  if (typeof rawText !== 'string') {
+    return [];
+  }
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const lines = trimmed.includes('\n')
+    ? trimmed.split(/\r?\n/)
+    : trimmed.split(',');
+
+  const results = [];
+  for (let i = 0; i < lines.length && results.length < MAX_SEGMENTS; i++) {
+    const clean = lines[i].trim().toUpperCase().slice(0, 48);
+    if (!clean) continue;
+    const idx = startIndex + results.length;
+    results.push({
+      id: `bulk-${Date.now()}-${idx}`,
+      label: clean,
+      color: SLICE_COLORS[idx % SLICE_COLORS.length].toLowerCase(),
+      imageUrl: '',
+      weight: 1
+    });
+  }
+  return results;
+}
+
+export function sortLeaderboardTeams(teams) {
+  if (!Array.isArray(teams)) {
+    return [];
+  }
+  const sorted = teams
+    .map((team, originalIndex) => ({ ...team, originalIndex }))
+    .sort((a, b) => {
+      const diff = (b.score || 0) - (a.score || 0);
+      return diff !== 0 ? diff : a.originalIndex - b.originalIndex;
+    });
+
+  let currentRank = 1;
+  return sorted.map((team, idx) => {
+    if (idx > 0 && (team.score || 0) < (sorted[idx - 1].score || 0)) {
+      currentRank = idx + 1;
+    }
+    return { ...team, rank: currentRank };
+  });
+}
+
 export const ROOM_PRESETS = [
   {
     id: 'versus-match',
     name: '1v1 Versus Match',
     badge: 'Head-to-Head',
+    mode: 'versus',
+    drawMode: 'eliminate',
     description: 'Sports, esports, debates, or trivia duels with Best-of-N series tracking.',
     title: 'LIVE SHOWMATCH',
     bestOf: 5,
@@ -111,7 +187,9 @@ export const ROOM_PRESETS = [
   {
     id: 'raffle-wheel',
     name: 'Giveaway & Raffle',
-    badge: 'Picker',
+    badge: 'Wheel Only',
+    mode: 'wheel-only',
+    drawMode: 'keep',
     description: 'Prize draws, viewer raffles, sponsor giveaways, and weighted random picks.',
     title: 'LIVE GIVEAWAY',
     bestOf: 0,
@@ -147,10 +225,12 @@ export const ROOM_PRESETS = [
   {
     id: 'party-leaderboard',
     name: 'Trivia & Party Night',
-    badge: 'Event Night',
-    description: 'Interactive trivia categories, quiz rounds, and group party events.',
+    badge: 'Leaderboard',
+    mode: 'leaderboard',
+    drawMode: 'eliminate',
+    description: 'Multiplayer trivia categories, quiz nights, and 3–8 squad leaderboards.',
     title: 'TRIVIA & PARTY NIGHT',
-    bestOf: 7,
+    bestOf: 0,
     teams: [
       {
         id: 'a',
@@ -169,6 +249,24 @@ export const ROOM_PRESETS = [
         textColor: '#091210',
         logoUrl: '',
         score: 0
+      },
+      {
+        id: 'c',
+        name: 'TEAM EMERALD',
+        subtitle: 'GREEN SQUAD',
+        color: '#0d9f67',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      },
+      {
+        id: 'd',
+        name: 'TEAM CRIMSON',
+        subtitle: 'RED SQUAD',
+        color: '#e11d48',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
       }
     ],
     items: [
@@ -183,6 +281,8 @@ export const ROOM_PRESETS = [
     id: 'workshop-wheel',
     name: 'Variety & Challenges',
     badge: 'Creator',
+    mode: 'wheel-only',
+    drawMode: 'keep',
     description: 'Stream challenges, live Q&A topics, karaoke picks, or classroom prompts.',
     title: 'LIVE CHALLENGE WHEEL',
     bestOf: 0,
@@ -221,6 +321,8 @@ export const CLASSIC_PRESETS = [
     id: 'fdn-vs-lauchang',
     name: 'FDN vs Lauchang',
     badge: 'Classic Event',
+    mode: 'versus',
+    drawMode: 'eliminate',
     description: 'The original 5-game broadcast showdown with classic FDN and Lauchang routes.',
     title: 'FDN VS LAUCHANG',
     bestOf: 5,
@@ -283,19 +385,23 @@ export function normalizeItem(raw, index = 0) {
   };
 }
 
-export function normalizeTeam(raw, fallback) {
-  const color = sanitizeHexColor(raw?.color, fallback.color);
+export function normalizeTeam(raw, fallback, index = 0) {
+  const defaultColor = fallback?.color || TEAM_PALETTE[index % TEAM_PALETTE.length];
+  const color = sanitizeHexColor(raw?.color, defaultColor);
   const textColor = raw?.textColor
     ? sanitizeHexColor(raw.textColor, pickContrastingTextColor(color))
     : pickContrastingTextColor(color);
   const parsedScore = Number(raw?.score);
-  const score = Number.isFinite(parsedScore) ? Math.max(0, Math.min(999, Math.round(parsedScore))) : fallback.score;
-  const rawName = typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim() : fallback.name;
-  const rawSubtitle = typeof raw?.subtitle === 'string' ? raw.subtitle.trim() : fallback.subtitle;
-  const logoUrl = raw?.logoUrl !== undefined ? sanitizeMediaUrl(raw.logoUrl) : fallback.logoUrl;
+  const score = Number.isFinite(parsedScore) ? Math.max(0, Math.min(9999, Math.round(parsedScore))) : (fallback?.score || 0);
+  const rawName = typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim() : (fallback?.name || `PLAYER ${index + 1}`);
+  const rawSubtitle = typeof raw?.subtitle === 'string' ? raw.subtitle.trim() : (fallback?.subtitle || '');
+  const logoUrl = raw?.logoUrl !== undefined ? sanitizeMediaUrl(raw.logoUrl) : (fallback?.logoUrl || '');
+  const id = typeof raw?.id === 'string' && raw.id.trim()
+    ? raw.id.trim().slice(0, 32)
+    : (fallback?.id || `team-${index + 1}`);
 
   return {
-    id: fallback.id,
+    id,
     name: rawName.toUpperCase().slice(0, 24),
     subtitle: rawSubtitle.toUpperCase().slice(0, 32),
     color,
@@ -305,16 +411,33 @@ export function normalizeTeam(raw, fallback) {
   };
 }
 
+function normalizeTeamsList(rawTeams, fallbackTeams, mode) {
+  const maxCount = mode === 'leaderboard' ? MAX_LEADERBOARD_TEAMS : 2;
+  const source = Array.isArray(rawTeams) && rawTeams.length > 0 ? rawTeams : fallbackTeams;
+  const limited = source.slice(0, maxCount);
+  const normalized = limited.map((team, idx) =>
+    normalizeTeam(team, fallbackTeams[idx] || fallbackTeams[0], idx)
+  );
+  while (normalized.length < 2) {
+    const idx = normalized.length;
+    normalized.push(normalizeTeam({}, fallbackTeams[idx] || {
+      id: idx === 0 ? 'a' : 'b',
+      name: idx === 0 ? 'TEAM A' : 'TEAM B',
+      subtitle: '',
+      color: TEAM_PALETTE[idx % TEAM_PALETTE.length],
+      logoUrl: '',
+      score: 0
+    }, idx));
+  }
+  return normalized;
+}
+
 export function createPresetRoomState(presetId = 'versus-match', overrides = {}) {
   const preset = ALL_PRESETS.find((p) => p.id === presetId) || ROOM_PRESETS[0];
   const roomId = overrides.roomId || preset.id;
-  const teamsInput = Array.isArray(overrides.teams) && overrides.teams.length === 2
-    ? overrides.teams
-    : preset.teams;
-  const teams = [
-    normalizeTeam(teamsInput[0], preset.teams[0]),
-    normalizeTeam(teamsInput[1], preset.teams[1])
-  ];
+  const mode = normalizeEventMode(overrides.mode, preset.mode || 'versus');
+  const drawMode = normalizeDrawMode(overrides.drawMode, preset.drawMode || 'eliminate');
+  const teams = normalizeTeamsList(overrides.teams, preset.teams, mode);
 
   const itemsInput = Array.isArray(overrides.items) && overrides.items.length > 0
     ? overrides.items
@@ -322,12 +445,12 @@ export function createPresetRoomState(presetId = 'versus-match', overrides = {})
   const items = itemsInput
     .map((item, idx) => normalizeItem(item, idx))
     .filter((item) => item.label.length > 0)
-    .slice(0, 32);
+    .slice(0, MAX_SEGMENTS);
 
   const parsedBestOf = overrides.bestOf !== undefined ? Number(overrides.bestOf) : preset.bestOf;
-  const bestOf = Number.isFinite(parsedBestOf)
+  const bestOf = mode === 'versus' && Number.isFinite(parsedBestOf)
     ? Math.max(0, Math.min(15, Math.round(parsedBestOf)))
-    : preset.bestOf;
+    : 0;
 
   const rawTitle = typeof overrides.title === 'string' && overrides.title.trim()
     ? overrides.title.trim()
@@ -336,6 +459,8 @@ export function createPresetRoomState(presetId = 'versus-match', overrides = {})
   return {
     roomId,
     title: rawTitle.toUpperCase().slice(0, 64),
+    mode,
+    drawMode,
     teams,
     bestOf,
     items,
@@ -368,28 +493,31 @@ export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
     return base;
   }
 
-  const hasNewTeams = Array.isArray(raw.teams) && raw.teams.length === 2;
+  const mode = normalizeEventMode(raw.mode, base.mode);
+  const drawMode = normalizeDrawMode(raw.drawMode, base.drawMode);
+
+  const hasNewTeams = Array.isArray(raw.teams) && raw.teams.length > 0;
   const teams = hasNewTeams
-    ? [normalizeTeam(raw.teams[0], base.teams[0]), normalizeTeam(raw.teams[1], base.teams[1])]
+    ? normalizeTeamsList(raw.teams, base.teams, mode)
     : [
-        normalizeTeam({ ...base.teams[0], score: typeof raw.fdnScore === 'number' ? raw.fdnScore : base.teams[0].score }, base.teams[0]),
-        normalizeTeam({ ...base.teams[1], score: typeof raw.lauchangScore === 'number' ? raw.lauchangScore : base.teams[1].score }, base.teams[1])
+        normalizeTeam({ ...base.teams[0], score: typeof raw.fdnScore === 'number' ? raw.fdnScore : base.teams[0].score }, base.teams[0], 0),
+        normalizeTeam({ ...base.teams[1], score: typeof raw.lauchangScore === 'number' ? raw.lauchangScore : base.teams[1].score }, base.teams[1], 1)
       ];
 
   let items;
   if (Array.isArray(raw.items)) {
-    items = raw.items.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, 32);
+    items = raw.items.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, MAX_SEGMENTS);
   } else if (Array.isArray(raw.remainingGames)) {
-    items = raw.remainingGames.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, 32);
+    items = raw.remainingGames.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, MAX_SEGMENTS);
   } else {
     items = base.items;
   }
 
   let drawnItems;
   if (Array.isArray(raw.drawnItems)) {
-    drawnItems = raw.drawnItems.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, 64);
+    drawnItems = raw.drawnItems.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, MAX_SEGMENTS);
   } else if (Array.isArray(raw.drawnGames)) {
-    drawnItems = raw.drawnGames.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, 64);
+    drawnItems = raw.drawnGames.map((item, idx) => normalizeItem(item, idx)).filter((item) => item.label.length > 0).slice(0, MAX_SEGMENTS);
   } else {
     drawnItems = [];
   }
@@ -449,9 +577,9 @@ export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
     : [];
 
   const parsedBestOf = raw.bestOf !== undefined ? Number(raw.bestOf) : base.bestOf;
-  const bestOf = Number.isFinite(parsedBestOf)
+  const bestOf = mode === 'versus' && Number.isFinite(parsedBestOf)
     ? Math.max(0, Math.min(15, Math.round(parsedBestOf)))
-    : base.bestOf;
+    : 0;
 
   const title = typeof raw.title === 'string' && raw.title.trim()
     ? raw.title.trim().toUpperCase().slice(0, 64)
@@ -460,6 +588,8 @@ export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
   return {
     roomId,
     title,
+    mode,
+    drawMode,
     teams,
     bestOf,
     items,
@@ -482,13 +612,15 @@ export function getRoomUrls(roomId = DEFAULT_ROOM_ID, legacyDefault = false) {
     return {
       control: '/control',
       roulette: '/roulette',
-      scoreboard: '/scoreboard'
+      scoreboard: '/scoreboard',
+      stage: '/stage'
     };
   }
   const encoded = encodeURIComponent(roomId);
   return {
     control: `/room/${encoded}/control`,
     roulette: `/room/${encoded}/roulette`,
-    scoreboard: `/room/${encoded}/scoreboard`
+    scoreboard: `/room/${encoded}/scoreboard`,
+    stage: `/room/${encoded}/stage`
   };
 }

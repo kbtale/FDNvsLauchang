@@ -10,6 +10,7 @@ import Hub from './views/Hub';
 import ControlPanel from './views/ControlPanel';
 import RouletteOverlay from './views/RouletteOverlay';
 import ScoreboardOverlay from './views/ScoreboardOverlay';
+import StageView from './views/StageView';
 import { DEFAULT_ROOM_ID } from './lib/roomSchema';
 
 export function navigateTo(path) {
@@ -31,8 +32,11 @@ export function parseRoute(pathname) {
   if (cleanPath === '/scoreboard') {
     return { view: 'scoreboard', roomId: DEFAULT_ROOM_ID, legacyRoute: true };
   }
+  if (cleanPath === '/stage') {
+    return { view: 'stage', roomId: DEFAULT_ROOM_ID, legacyRoute: true };
+  }
 
-  const roomMatch = cleanPath.match(/^\/room\/([a-zA-Z0-9_-]{1,64})\/(control|roulette|scoreboard)$/);
+  const roomMatch = cleanPath.match(/^\/room\/([a-zA-Z0-9_-]{1,64})\/(control|roulette|scoreboard|stage)$/);
   if (roomMatch) {
     return {
       view: roomMatch[2],
@@ -56,7 +60,7 @@ export default function App() {
   }, []);
 
   const route = parseRoute(currentPath);
-  const isOverlay = route.view === 'roulette' || route.view === 'scoreboard';
+  const isOverlay = route.view === 'roulette' || route.view === 'scoreboard' || route.view === 'stage';
 
   let page;
   if (route.view === 'control') {
@@ -65,6 +69,8 @@ export default function App() {
     page = <RouletteOverlay roomId={route.roomId} />;
   } else if (route.view === 'scoreboard') {
     page = <ScoreboardOverlay roomId={route.roomId} />;
+  } else if (route.view === 'stage') {
+    page = <StageView roomId={route.roomId} />;
   } else {
     page = <Hub />;
   }

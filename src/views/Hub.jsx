@@ -20,9 +20,12 @@ import TeamAvatar from '../components/TeamAvatar';
 import {
   CLASSIC_PRESETS,
   DEFAULT_ROOM_ID,
+  MAX_LEADERBOARD_TEAMS,
+  MAX_SEGMENTS,
   ROOM_PRESETS,
   getRoomUrls,
   getTokenStorageKey,
+  parseBulkSegments,
   pickContrastingTextColor,
   sanitizeMediaUrl
 } from '../lib/roomSchema';
@@ -38,6 +41,8 @@ export default function Hub() {
   const { lang, setLang, t } = useI18n();
   const defaultPreset = ROOM_PRESETS[0];
   const [selectedPresetId, setSelectedPresetId] = useState(defaultPreset.id);
+  const [mode, setMode] = useState(defaultPreset.mode || 'versus');
+  const [drawMode, setDrawMode] = useState(defaultPreset.drawMode || 'eliminate');
   const [title, setTitle] = useState(defaultPreset.title);
   const [customRoomId, setCustomRoomId] = useState('');
   const [password, setPassword] = useState(() => generateRandomPin());
@@ -45,6 +50,8 @@ export default function Hub() {
   const [teams, setTeams] = useState(() => defaultPreset.teams.map((tm) => ({ ...tm })));
   const [items, setItems] = useState(() => defaultPreset.items.map((it) => ({ ...it })));
   const [newSegmentLabel, setNewSegmentLabel] = useState('');
+  const [showBulkPaste, setShowBulkPaste] = useState(false);
+  const [bulkText, setBulkText] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createdRoom, setCreatedRoom] = useState(null);
@@ -52,12 +59,45 @@ export default function Hub() {
 
   const applyPreset = (preset) => {
     setSelectedPresetId(preset.id);
+    setMode(preset.mode || 'versus');
+    setDrawMode(preset.drawMode || 'eliminate');
     setTitle(preset.title);
     setBestOf(preset.bestOf);
     setTeams(preset.teams.map((tm) => ({ ...tm })));
     setItems(preset.items.map((it) => ({ ...it })));
     setCreateError('');
     setCreatedRoom(null);
+  };
+
+  const addParticipant = () => {
+    if (teams.length >= MAX_LEADERBOARD_TEAMS) return;
+    const idx = teams.length;
+    const color = SLICE_COLORS[idx % SLICE_COLORS.length].toLowerCase();
+    setTeams((prev) => [
+      ...prev,
+      {
+        id: `p-${Date.now()}-${idx}`,
+        name: `PLAYER ${idx + 1}`,
+        subtitle: '',
+        color,
+        textColor: pickContrastingTextColor(color),
+        logoUrl: '',
+        score: 0
+      }
+    ]);
+  };
+
+  const removeParticipant = (index) => {
+    setTeams((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
+  const handleBulkImport = (replaceExisting) => {
+    const parsed = parseBulkSegments(bulkText, replaceExisting ? 0 : items.length);
+    if (parsed.length === 0) return;
+    setItems((prev) => (replaceExisting ? parsed : [...prev, ...parsed]).slice(0, MAX_SEGMENTS));
+    setBulkText('');
+    setShowBulkPaste(false);
+    toast.success(`Imported ${parsed.length} segments`);
   };
 
   const updateTeamField = (index, field, value) => {
@@ -128,10 +168,12 @@ export default function Hub() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           presetId: selectedPresetId,
+          mode,
+          drawMode,
           title,
           roomId: customRoomId.trim() || undefined,
           password: password.trim(),
-          bestOf: Number(bestOf) || 0,
+          bestOf: mode === 'versus' ? (Number(bestOf) || 0) : 0,
           teams: teams.map((tm) => ({
             ...tm,
             logoUrl: sanitizeMediaUrl(tm.logoUrl)
@@ -304,8 +346,11 @@ export default function Hub() {
                   className="btn-secondary"
                   onClick={() => copyAbsoluteUrl(createdRoom.urls.scoreboard, 'Scoreboard (920×220)')}
                 >
-                  <Copy size={14} /> Scoreboard (920×220)
+                  <Copy size={14} /> Scoreboard
                 </button>
+                <a href={createdRoom.urls.stage} target="_blank" rel="noreferrer" className="btn-secondary">
+                  Stage View <ExternalLink size={14} />
+                </a>
               </div>
             </div>
           </div>
@@ -389,83 +434,158 @@ export default function Hub() {
                 </label>
 
                 <label className="studio-field">
-                  <span>{t('matchFormat')}</span>
+                  <span>Event Mode</span>
                   <select
                     className="studio-input"
-                    value={bestOf}
-                    onChange={(e) => setBestOf(Number(e.target.value))}
+                    value={mode}
+                    onChange={(e) => {
+                      const nextMode = e.target.value;
+                      setMode(nextMode);
+                      if (nextMode === 'leaderboard' && teams.length < 3) {
+                        addParticipant();
+                      }
+                    }}
                   >
-                    <option value={0}>{t('freeplay')}</option>
-                    <option value={3}>Best of 3</option>
-                    <option value={5}>Best of 5</option>
-                    <option value={7}>Best of 7</option>
-                    <option value={9}>Best of 9</option>
+                    <option value="versus">1v1 Versus Match</option>
+                    <option value="leaderboard">Leaderboard (2–8 Players)</option>
+                    <option value="wheel-only">Wheel Only / Raffle</option>
                   </select>
                 </label>
-              </div>
 
-              <div className="responsive-grid-2" style={{ marginBottom: 22 }}>
-                {teams.map((team, idx) => (
-                  <div key={team.id} className="card-panel-active" style={{ padding: 18 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                      <TeamAvatar
-                        name={team.name}
-                        logoUrl={team.logoUrl}
-                        color={team.color}
-                        textColor={team.textColor}
-                        size={46}
-                      />
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                          {idx === 0 ? 'Left Side · Team A' : 'Right Side · Team B'}
-                        </div>
-                        <div style={{ fontSize: 16, fontWeight: 900 }}>{team.name || 'TEAM'}</div>
-                      </div>
-                      <input
-                        type="color"
-                        aria-label={`${team.name} color`}
-                        value={team.color}
-                        onChange={(e) => updateTeamField(idx, 'color', e.target.value)}
-                        style={{ marginLeft: 'auto', width: 42, height: 34, border: 'none', background: 'transparent', cursor: 'pointer' }}
-                      />
-                    </div>
+                <label className="studio-field">
+                  <span>Wheel Draw Rule</span>
+                  <select
+                    className="studio-input"
+                    value={drawMode}
+                    onChange={(e) => setDrawMode(e.target.value)}
+                  >
+                    <option value="eliminate">Eliminate Winner</option>
+                    <option value="keep">Keep on Wheel</option>
+                  </select>
+                </label>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-                      <input
-                        type="text"
-                        className="studio-input"
-                        placeholder="Team Name"
-                        value={team.name}
-                        onChange={(e) => updateTeamField(idx, 'name', e.target.value)}
-                        maxLength={24}
-                      />
-                      <input
-                        type="text"
-                        className="studio-input"
-                        placeholder="Subtitle"
-                        value={team.subtitle}
-                        onChange={(e) => updateTeamField(idx, 'subtitle', e.target.value)}
-                        maxLength={32}
-                      />
-                    </div>
-
-                    <input
-                      type="text"
+                {mode === 'versus' && (
+                  <label className="studio-field">
+                    <span>{t('matchFormat')}</span>
+                    <select
                       className="studio-input"
-                      placeholder="Logo URL (https://... or /LOGO FDN.png — blank for monogram)"
-                      value={team.logoUrl}
-                      onChange={(e) => updateTeamField(idx, 'logoUrl', e.target.value)}
-                    />
-                  </div>
-                ))}
+                      value={bestOf}
+                      onChange={(e) => setBestOf(Number(e.target.value))}
+                    >
+                      <option value={0}>{t('freeplay')}</option>
+                      <option value={3}>Best of 3</option>
+                      <option value={5}>Best of 5</option>
+                      <option value={7}>Best of 7</option>
+                      <option value={9}>Best of 9</option>
+                    </select>
+                  </label>
+                )}
               </div>
+
+              {mode !== 'wheel-only' && (
+                <div style={{ marginBottom: 22 }}>
+                  {mode === 'leaderboard' && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <strong style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+                        Participants / Squads ({teams.length}/{MAX_LEADERBOARD_TEAMS})
+                      </strong>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ padding: '7px 14px', fontSize: 13 }}
+                        disabled={teams.length >= MAX_LEADERBOARD_TEAMS}
+                        onClick={addParticipant}
+                      >
+                        <Plus size={14} /> Add Participant
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="responsive-grid-2">
+                    {(mode === 'versus' ? teams.slice(0, 2) : teams).map((team, idx) => (
+                      <div key={team.id} className="card-panel-active" style={{ padding: 18 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                          <TeamAvatar
+                            name={team.name}
+                            logoUrl={team.logoUrl}
+                            color={team.color}
+                            textColor={team.textColor}
+                            size={46}
+                          />
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                              {mode === 'versus'
+                                ? (idx === 0 ? 'Left Side · Team A' : 'Right Side · Team B')
+                                : `Participant #${idx + 1}`}
+                            </div>
+                            <div style={{ fontSize: 16, fontWeight: 900 }}>{team.name || 'TEAM'}</div>
+                          </div>
+                          <input
+                            type="color"
+                            aria-label={`${team.name} color`}
+                            value={team.color}
+                            onChange={(e) => updateTeamField(idx, 'color', e.target.value)}
+                            style={{ marginLeft: 'auto', width: 42, height: 34, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                          />
+                          {mode === 'leaderboard' && teams.length > 2 && (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              style={{ padding: '6px 8px' }}
+                              onClick={() => removeParticipant(idx)}
+                              aria-label={`Remove ${team.name}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                          <input
+                            type="text"
+                            className="studio-input"
+                            placeholder="Name"
+                            value={team.name}
+                            onChange={(e) => updateTeamField(idx, 'name', e.target.value)}
+                            maxLength={24}
+                          />
+                          <input
+                            type="text"
+                            className="studio-input"
+                            placeholder="Subtitle"
+                            value={team.subtitle}
+                            onChange={(e) => updateTeamField(idx, 'subtitle', e.target.value)}
+                            maxLength={32}
+                          />
+                        </div>
+
+                        <input
+                          type="text"
+                          className="studio-input"
+                          placeholder="Logo URL (https://... — blank for monogram)"
+                          value={team.logoUrl}
+                          onChange={(e) => updateTeamField(idx, 'logoUrl', e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="card-panel-active" style={{ padding: 18, marginBottom: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Dices size={18} color="var(--accent-gold)" /> {t('wheelSegments')} ({items.length})
                   </h3>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: 13 }}
+                      onClick={() => setShowBulkPaste((v) => !v)}
+                    >
+                      Bulk Paste
+                    </button>
                     <input
                       type="text"
                       className="studio-input"
@@ -478,13 +598,33 @@ export default function Hub() {
                           addSegment();
                         }
                       }}
-                      style={{ width: 220 }}
+                      style={{ width: 200 }}
                     />
                     <button type="button" className="btn-secondary" style={{ padding: '8px 14px' }} onClick={addSegment}>
                       <Plus size={15} /> {t('add')}
                     </button>
                   </div>
                 </div>
+
+                {showBulkPaste && (
+                  <div className="bulk-paste-box">
+                    <textarea
+                      className="studio-input"
+                      rows={4}
+                      placeholder="Paste one entry per line (or comma-separated) — up to 64 items..."
+                      value={bulkText}
+                      onChange={(e) => setBulkText(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button type="button" className="btn-white" style={{ padding: '8px 14px', fontSize: 13 }} onClick={() => handleBulkImport(true)}>
+                        Replace Wheel
+                      </button>
+                      <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 13 }} onClick={() => handleBulkImport(false)}>
+                        Append to Wheel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {items.map((item, idx) => (

@@ -81,7 +81,8 @@ describe('Multi-Room API & Strict Room Isolation', () => {
     expect(createRes.body.urls).toEqual({
       control: '/room/friday-cup/control',
       roulette: '/room/friday-cup/roulette',
-      scoreboard: '/room/friday-cup/scoreboard'
+      scoreboard: '/room/friday-cup/scoreboard',
+      stage: '/room/friday-cup/stage'
     });
     expect(createRes.body.state.teams[0].logoUrl).toBe('https://example.com/a.png');
     expect(createRes.body.state.teams[1].logoUrl).toBe('');

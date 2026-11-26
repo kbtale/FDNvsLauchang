@@ -1,12 +1,69 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
-import { DEFAULT_ROOM_ID } from '../lib/roomSchema';
+import { DEFAULT_ROOM_ID, sortLeaderboardTeams } from '../lib/roomSchema';
 import { formatScoreDelta } from '../lib/wheel';
 import TeamAvatar from '../components/TeamAvatar';
-import { Gamepad2 } from 'lucide-react';
+import { Gamepad2, Sparkles, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = false }) {
+  const mode = state.mode || 'versus';
+  const activeLabel = state.activeItem?.label || 'WAITING FOR SPIN';
+
+  if (mode === 'wheel-only') {
+    return (
+      <div className={`broadcast-wheel-banner ${compact ? 'broadcast-3d-compact' : ''}`}>
+        <div className="broadcast-wheel-banner-top">
+          <Sparkles size={compact ? 14 : 18} color="var(--accent-gold)" />
+          <span>{state.title}</span>
+        </div>
+        <div className="broadcast-wheel-banner-main">
+          {activeLabel}
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'leaderboard') {
+    const ranked = sortLeaderboardTeams(state.teams || []);
+    return (
+      <div className={`broadcast-leaderboard ${compact ? 'broadcast-leaderboard-compact' : ''}`}>
+        <div className="broadcast-leaderboard-header">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Trophy size={compact ? 15 : 18} color="var(--accent-gold)" />
+            {state.title}
+          </span>
+          <span className="broadcast-leaderboard-active">{activeLabel}</span>
+        </div>
+        <div className="broadcast-leaderboard-rows">
+          {ranked.map((team) => (
+            <div
+              key={team.id}
+              className="broadcast-leaderboard-row"
+              style={{ borderLeft: `5px solid ${team.color}` }}
+            >
+              <span className={`leaderboard-rank ${team.rank === 1 ? 'leaderboard-rank-gold' : ''}`}>
+                #{team.rank}
+              </span>
+              <TeamAvatar
+                name={team.name}
+                logoUrl={team.logoUrl}
+                color={team.color}
+                textColor={team.textColor}
+                size={compact ? 30 : 40}
+              />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div className="leaderboard-name">{team.name}</div>
+                {team.subtitle && <div className="leaderboard-sub">{team.subtitle}</div>}
+              </div>
+              <div className="leaderboard-score">{team.score}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const teamA = state.teams?.[0] || {
     name: 'TEAM A',
     subtitle: '',
@@ -28,7 +85,6 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
   const winsNeeded = bestOf > 0 ? Math.ceil(bestOf / 2) : 0;
   const deltaALabel = formatScoreDelta(deltaA);
   const deltaBLabel = formatScoreDelta(deltaB);
-  const activeLabel = state.activeItem?.label || 'WAITING FOR SPIN';
 
   return (
     <div className={`broadcast-3d-scoreboard ${compact ? 'broadcast-3d-compact' : ''}`}>

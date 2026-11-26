@@ -4,10 +4,13 @@ export const DEFAULT_ROOM_ID = 'fdn-vs-lauchang';
 export const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const ROOM_CREATE_MAX_ATTEMPTS = 10;
+const ROOM_CREATE_WINDOW_MS = 60 * 60 * 1000;
 const ROOM_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 let ephemeralDevSecret = null;
 const memoryRateLimits = new Map();
+const memoryRoomCreateLimits = new Map();
 
 export function isProduction() {
   return (
@@ -218,6 +221,39 @@ export function clearLoginRateLimit(key) {
 
 export function resetRateLimiter() {
   memoryRateLimits.clear();
+}
+
+export function checkRoomCreateRateLimit(ip, now = Date.now()) {
+  const key = String(ip || 'unknown');
+  const entry = memoryRoomCreateLimits.get(key);
+  if (!entry || now >= entry.resetAt) {
+    if (entry) {
+      memoryRoomCreateLimits.delete(key);
+    }
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+  if (entry.count >= ROOM_CREATE_MAX_ATTEMPTS) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
+    return { limited: true, retryAfterSeconds };
+  }
+  return { limited: false, retryAfterSeconds: 0 };
+}
+
+export function recordRoomCreate(ip, now = Date.now()) {
+  const key = String(ip || 'unknown');
+  const entry = memoryRoomCreateLimits.get(key);
+  if (!entry || now >= entry.resetAt) {
+    memoryRoomCreateLimits.set(key, {
+      count: 1,
+      resetAt: now + ROOM_CREATE_WINDOW_MS
+    });
+    return;
+  }
+  entry.count += 1;
+}
+
+export function resetRoomCreateRateLimit() {
+  memoryRoomCreateLimits.clear();
 }
 
 function getAllowedOrigins(req) {

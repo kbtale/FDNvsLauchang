@@ -1,95 +1,66 @@
+import {
+  DEFAULT_ROOM_ID,
+  fixLegacyGameName,
+  normalizeRoomState
+} from './roomSchema';
+
 const INITIAL_GAMES = ['FORTNITE', 'CLASH ROYALE', 'COPA ROBLOX', 'COUNTER-STRIKE 2', 'FALL GUYS'];
-const STORAGE_KEY = 'fdn_vs_lauchang_state_v5';
-const CHANNEL_NAME = 'fdn_vs_lauchang_channel_v5';
 const SYNC_API_ENDPOINT = '/api/sync';
 
-const fixGameName = (name) => {
-  if (!name) return name;
-  const upper = String(name).trim().toUpperCase();
-  if (upper === 'CS' || upper === 'COUNTER STRIKE' || upper === 'COUNTER STRIKE 2' || upper === 'COUNTER-STRIKE' || upper === 'COUNTER-STRIKE 2') {
-    return 'COUNTER-STRIKE 2';
-  }
-  return name;
-};
+function getStorageKey(roomId) {
+  return `arenaobs_room_state:${roomId || DEFAULT_ROOM_ID}`;
+}
 
-export const getInitialState = () => {
+function getChannelName(roomId) {
+  return `arenaobs_room_channel:${roomId || DEFAULT_ROOM_ID}`;
+}
+
+export const getInitialState = (roomId = DEFAULT_ROOM_ID) => {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(getStorageKey(roomId));
     if (saved) {
-      const parsed = JSON.parse(saved);
-      const remaining = (parsed.remainingGames || INITIAL_GAMES).map(fixGameName);
-      const drawn = (parsed.drawnGames || []).map(fixGameName);
-      const wheel = parsed.wheelGames ? parsed.wheelGames.map(fixGameName) : null;
-      const active = fixGameName(parsed.activeGame);
-
-      return {
-        remainingGames: remaining,
-        drawnGames: drawn,
-        wheelGames: wheel,
-        wheelRotation: typeof parsed.wheelRotation === 'number' ? parsed.wheelRotation : 0,
-        fdnScore: typeof parsed.fdnScore === 'number' ? parsed.fdnScore : 0,
-        lauchangScore: typeof parsed.lauchangScore === 'number' ? parsed.lauchangScore : 0,
-        activeGame: active || null,
-        isSpinning: !!parsed.isSpinning,
-        winningIndex: typeof parsed.winningIndex === 'number' ? parsed.winningIndex : null,
-        showWinnerModal: !!parsed.showWinnerModal,
-        spinSeed: parsed.spinSeed || 0,
-        spinInitiator: parsed.spinInitiator || null,
-        updatedAt: parsed.updatedAt || 0
-      };
+      return normalizeRoomState(JSON.parse(saved), roomId);
+    }
+    if (roomId === DEFAULT_ROOM_ID) {
+      const legacy = localStorage.getItem('fdn_vs_lauchang_state_v5');
+      if (legacy) {
+        return normalizeRoomState(JSON.parse(legacy), roomId);
+      }
     }
   } catch {}
-
-  return {
-    remainingGames: [...INITIAL_GAMES],
-    drawnGames: [],
-    wheelGames: null,
-    wheelRotation: 0,
-    fdnScore: 0,
-    lauchangScore: 0,
-    activeGame: null,
-    isSpinning: false,
-    winningIndex: null,
-    showWinnerModal: false,
-    spinSeed: 0,
-    spinInitiator: null,
-    updatedAt: 0
-  };
+  return normalizeRoomState({}, roomId);
 };
 
-export const saveState = (state) => {
+export const saveState = (state, roomId = DEFAULT_ROOM_ID) => {
   try {
-    const cleanedState = {
-      ...state,
-      remainingGames: (state.remainingGames || []).map(fixGameName),
-      drawnGames: (state.drawnGames || []).map(fixGameName),
-      wheelGames: state.wheelGames ? state.wheelGames.map(fixGameName) : null,
-      activeGame: fixGameName(state.activeGame)
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedState));
+    const normalized = normalizeRoomState(state, roomId);
+    localStorage.setItem(getStorageKey(roomId), JSON.stringify(normalized));
   } catch {}
 };
 
 export class SyncEngine {
   constructor(onStateUpdate, options = {}) {
     this.onStateUpdate = onStateUpdate;
+    this.roomId = options.roomId || DEFAULT_ROOM_ID;
     this.getAuthToken = typeof options.getAuthToken === 'function' ? options.getAuthToken : null;
     this.onUnauthorized = typeof options.onUnauthorized === 'function' ? options.onUnauthorized : null;
-    this.roomId = options.roomId || 'fdn-vs-lauchang';
+    this.onMetaUpdate = typeof options.onMetaUpdate === 'function' ? options.onMetaUpdate : null;
+    this.storageKey = getStorageKey(this.roomId);
     this.channel = typeof window !== 'undefined' && 'BroadcastChannel' in window
-      ? new BroadcastChannel(CHANNEL_NAME)
+      ? new BroadcastChannel(getChannelName(this.roomId))
       : null;
     this.pollInterval = null;
+    this.lastEtag = null;
     this.clientId = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : Math.random().toString(36).substring(2);
 
-    const initial = getInitialState();
+    const initial = getInitialState(this.roomId);
     this.lastUpdatedAt = initial.updatedAt || 0;
     this.lastStateHash = this.computeHash(initial);
 
     this.handleMessage = (event) => {
-      if (event.data && typeof event.data === 'object' && event.data.remainingGames) {
+      if (event.data && typeof event.data === 'object') {
         this.processIncomingPayload(event.data, false);
       }
     };
@@ -99,11 +70,11 @@ export class SyncEngine {
     }
 
     this.handleStorage = (event) => {
-      if (event.key === STORAGE_KEY && event.newValue) {
+      if (event.key === this.storageKey && event.newValue) {
         try {
-          const newState = JSON.parse(event.newValue);
-          if (newState && newState.remainingGames) {
-            this.processIncomingPayload(newState, false);
+          const parsed = JSON.parse(event.newValue);
+          if (parsed && typeof parsed === 'object') {
+            this.processIncomingPayload(parsed, false);
           }
         } catch {}
       }
@@ -122,14 +93,16 @@ export class SyncEngine {
   }
 
   processIncomingPayload(payload, shouldPersist = true) {
-    if (!payload || typeof payload !== 'object' || !payload.remainingGames) return;
+    if (!payload || typeof payload !== 'object' || Object.keys(payload).length === 0) return;
+    if (payload.unchanged) return;
 
-    const incomingUpdatedAt = payload.updatedAt || 0;
-    if (incomingUpdatedAt < this.lastUpdatedAt) {
+    const incomingUpdatedAt = typeof payload.updatedAt === 'number' ? payload.updatedAt : 0;
+    if (incomingUpdatedAt > 0 && incomingUpdatedAt < this.lastUpdatedAt) {
       return;
     }
 
-    const hash = this.computeHash(payload);
+    const normalized = normalizeRoomState(payload, this.roomId);
+    const hash = this.computeHash(normalized);
     if (hash === this.lastStateHash) {
       this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
       return;
@@ -137,21 +110,14 @@ export class SyncEngine {
 
     this.lastStateHash = hash;
     this.lastUpdatedAt = Math.max(this.lastUpdatedAt, incomingUpdatedAt);
-
-    const cleaned = {
-      ...payload,
-      remainingGames: (payload.remainingGames || []).map(fixGameName),
-      drawnGames: (payload.drawnGames || []).map(fixGameName),
-      activeGame: fixGameName(payload.activeGame),
-      updatedAt: this.lastUpdatedAt
-    };
+    const finalState = { ...normalized, updatedAt: this.lastUpdatedAt };
 
     if (shouldPersist) {
-      saveState(cleaned);
+      saveState(finalState, this.roomId);
     }
 
     if (this.onStateUpdate) {
-      this.onStateUpdate(cleaned);
+      this.onStateUpdate(finalState);
     }
   }
 
@@ -159,17 +125,37 @@ export class SyncEngine {
     const fetchLatest = () => {
       if (typeof fetch === 'undefined') return;
       const roomParam = encodeURIComponent(this.roomId);
+      const headers = { Pragma: 'no-cache', 'Cache-Control': 'no-cache' };
+      if (this.lastEtag) {
+        headers['If-None-Match'] = this.lastEtag;
+      }
+
       fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}&_t=${Date.now()}`, {
         cache: 'no-store',
-        headers: { Pragma: 'no-cache', 'Cache-Control': 'no-cache' }
+        headers
       })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.remainingGames) {
+        .then(async (res) => {
+          const persistence = res.headers?.get?.('x-arenaobs-persistence') || null;
+          const etag = res.headers?.get?.('etag') || null;
+          if (etag) {
+            this.lastEtag = etag;
+          }
+          if (this.onMetaUpdate) {
+            this.onMetaUpdate({ connected: res.ok || res.status === 304, persistence });
+          }
+          if (res.status === 304 || !res.ok) {
+            return;
+          }
+          const data = await res.json();
+          if (data && typeof data === 'object' && Object.keys(data).length > 0) {
             this.processIncomingPayload(data, true);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (this.onMetaUpdate) {
+            this.onMetaUpdate({ connected: false, persistence: null });
+          }
+        });
     };
 
     fetchLatest();
@@ -181,20 +167,19 @@ export class SyncEngine {
     const newTimestamp = Math.max(now, this.lastUpdatedAt + 1);
     this.lastUpdatedAt = newTimestamp;
 
-    const cleanedState = {
-      ...state,
-      remainingGames: (state.remainingGames || []).map(fixGameName),
-      drawnGames: (state.drawnGames || []).map(fixGameName),
-      activeGame: fixGameName(state.activeGame),
-      updatedAt: newTimestamp
-    };
+    const normalized = normalizeRoomState(
+      { ...state, roomId: this.roomId, updatedAt: newTimestamp },
+      this.roomId
+    );
+    normalized.updatedAt = newTimestamp;
 
-    this.lastStateHash = this.computeHash(cleanedState);
-    saveState(cleanedState);
+    this.lastStateHash = this.computeHash(normalized);
+    this.lastEtag = null;
+    saveState(normalized, this.roomId);
 
     if (this.channel) {
       try {
-        this.channel.postMessage(cleanedState);
+        this.channel.postMessage(normalized);
       } catch {}
     }
 
@@ -211,18 +196,27 @@ export class SyncEngine {
       fetch(`${SYNC_API_ENDPOINT}?room=${roomParam}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(cleanedState)
+        body: JSON.stringify(normalized)
       })
-        .then((res) => {
+        .then(async (res) => {
+          const persistence = res.headers?.get?.('x-arenaobs-persistence') || null;
           if ((res.status === 401 || res.status === 403) && this.onUnauthorized) {
             this.onUnauthorized();
+            return;
+          }
+          if (this.onMetaUpdate) {
+            this.onMetaUpdate({ connected: res.ok, persistence });
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (this.onMetaUpdate) {
+            this.onMetaUpdate({ connected: false, persistence: null });
+          }
+        });
     }
 
     if (this.onStateUpdate) {
-      this.onStateUpdate(cleanedState);
+      this.onStateUpdate(normalized);
     }
   }
 
@@ -239,4 +233,4 @@ export class SyncEngine {
   }
 }
 
-export { INITIAL_GAMES, fixGameName };
+export { INITIAL_GAMES, fixLegacyGameName as fixGameName };

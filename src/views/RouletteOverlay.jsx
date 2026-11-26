@@ -1,29 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
+import { DEFAULT_ROOM_ID } from '../lib/roomSchema';
 import RouletteWheel from '../components/RouletteWheel';
 
-export default function RouletteOverlay() {
-  const [state, setState] = useState(getInitialState);
+export default function RouletteOverlay({ roomId = DEFAULT_ROOM_ID }) {
+  const [state, setState] = useState(() => getInitialState(roomId));
+
+  const queryOptions = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    const soundParam = params.get('sound');
+    const sizeParam = Number(params.get('size'));
+    return {
+      soundOverride: soundParam === '0' ? false : soundParam === '1' ? true : null,
+      size: Number.isFinite(sizeParam) && sizeParam >= 240 && sizeParam <= 1000 ? sizeParam : 520
+    };
+  }, []);
 
   useEffect(() => {
-    const engine = new SyncEngine((newState) => {
-      setState(newState);
-    });
+    setState(getInitialState(roomId));
+    const engine = new SyncEngine(
+      (newState) => {
+        setState(newState);
+      },
+      { roomId }
+    );
     return () => engine.destroy();
-  }, []);
+  }, [roomId]);
+
+  const soundEnabled = queryOptions.soundOverride !== null
+    ? queryOptions.soundOverride
+    : state.soundEnabled !== false;
 
   return (
     <div className="overlay-container transparent-bg">
       <RouletteWheel
-        remainingGames={state.remainingGames}
-        wheelGames={state.wheelGames}
-        wheelRotation={state.wheelRotation}
-        isSpinning={state.isSpinning}
-        winningIndex={state.winningIndex}
-        spinSeed={state.spinSeed}
+        items={state.items}
+        teams={state.teams}
+        title={state.title}
+        spin={state.spin}
         showWinnerModal={state.showWinnerModal}
-        activeGame={state.activeGame}
-        size={520}
+        activeItem={state.activeItem}
+        soundEnabled={soundEnabled}
+        size={queryOptions.size}
       />
     </div>
   );

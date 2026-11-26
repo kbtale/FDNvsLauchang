@@ -1,86 +1,201 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { SyncEngine, getInitialState, INITIAL_GAMES, fixGameName } from '../lib/sync';
-import FdnLogo from '../components/FdnLogo';
-import LauchangLogo from '../components/LauchangLogo';
-import { Play, RotateCcw, Plus, Minus, ExternalLink, Dices, Trophy, CheckCircle2, Trash2, RotateCw, AlertTriangle, Lock, LogOut, KeyRound } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@ui-sdk/react/alert-dialog';
+import { Switch, SwitchThumb } from '@ui-sdk/react/switch';
+import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@ui-sdk/react/tabs';
+import { toast } from '@ui-sdk/react/toast';
+import { SyncEngine, getInitialState } from '../lib/sync';
+import {
+  DEFAULT_ROOM_ID,
+  createPresetRoomState,
+  getRoomUrls,
+  getTokenStorageKey,
+  pickContrastingTextColor,
+  sanitizeMediaUrl
+} from '../lib/roomSchema';
+import {
+  DEFAULT_SPIN_DURATION_MS,
+  SLICE_COLORS,
+  computeTargetRotationForLayout,
+  pickWeightedIndex
+} from '../lib/wheel';
+import { useI18n } from '../lib/i18n';
+import { resolveControlShortcut } from '../lib/shortcuts';
+import TeamAvatar from '../components/TeamAvatar';
+import RouletteWheel from '../components/RouletteWheel';
+import { ScoreboardGraphic } from './ScoreboardOverlay';
+import { navigateTo } from '../App';
+import {
+  Play,
+  RotateCcw,
+  Plus,
+  Minus,
+  ExternalLink,
+  Dices,
+  Trophy,
+  CheckCircle2,
+  Trash2,
+  RotateCw,
+  AlertTriangle,
+  Lock,
+  LogOut,
+  KeyRound,
+  Volume2,
+  Settings,
+  Home,
+  Copy,
+  Undo2,
+  History,
+  MonitorPlay,
+  Languages,
+  Database,
+  Keyboard
+} from 'lucide-react';
 
-const SESSION_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
+const LEGACY_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
 
-export default function ControlPanel() {
-  const [state, setState] = useState(getInitialState);
+function readStoredToken(roomId) {
+  const scoped = sessionStorage.getItem(getTokenStorageKey(roomId));
+  if (scoped) return scoped;
+  if (roomId === DEFAULT_ROOM_ID) {
+    return sessionStorage.getItem(LEGACY_TOKEN_KEY);
+  }
+  return null;
+}
+
+function clearStoredToken(roomId) {
+  sessionStorage.removeItem(getTokenStorageKey(roomId));
+  if (roomId === DEFAULT_ROOM_ID) {
+    sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+  }
+}
+
+export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = false }) {
+  const { lang, setLang, t } = useI18n();
+  const [state, setState] = useState(() => getInitialState(roomId));
   const stateRef = useRef(state);
   const [syncEngine, setSyncEngine] = useState(null);
   const [newGameInput, setNewGameInput] = useState('');
-  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  const [newGameColor, setNewGameColor] = useState('#0d9f67');
+  const [newGameWeight, setNewGameWeight] = useState(1);
+  const [newGameImageUrl, setNewGameImageUrl] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [syncMeta, setSyncMeta] = useState({ connected: true, persistence: null });
+  const [undoCount, setUndoCount] = useState(0);
+  const undoStackRef = useRef([]);
   const spinTimerRef = useRef(null);
+
+  const roomUrls = getRoomUrls(roomId, legacyRoute);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   useEffect(() => {
-    const token = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    setState(getInitialState(roomId));
+    setIsAuthenticated(false);
+    undoStackRef.current = [];
+    setUndoCount(0);
+    const token = readStoredToken(roomId);
     if (token) {
-      fetch('/api/verify', {
+      fetch(`/api/verify?room=${encodeURIComponent(roomId)}`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then((res) => res.json())
         .then((data) => {
-          if (data && data.valid) {
+          if (data && data.valid && data.roomId === roomId) {
             setIsAuthenticated(true);
           } else {
-            sessionStorage.removeItem(SESSION_TOKEN_KEY);
+            clearStoredToken(roomId);
           }
         })
         .catch(() => {});
     }
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      const engine = new SyncEngine(
-        (newState) => {
-          setState(newState);
-        },
-        {
-          getAuthToken: () => sessionStorage.getItem(SESSION_TOKEN_KEY),
-          onUnauthorized: () => {
-            sessionStorage.removeItem(SESSION_TOKEN_KEY);
-            setIsAuthenticated(false);
-          }
-        }
-      );
-      setSyncEngine(engine);
-      return () => {
-        if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
-        engine.destroy();
-      };
+    if (!isAuthenticated) {
+      setSyncEngine(null);
+      return undefined;
     }
-  }, [isAuthenticated]);
+
+    const engine = new SyncEngine(
+      (newState) => {
+        setState(newState);
+      },
+      {
+        roomId,
+        getAuthToken: () => readStoredToken(roomId),
+        onUnauthorized: () => {
+          clearStoredToken(roomId);
+          setIsAuthenticated(false);
+        },
+        onMetaUpdate: (meta) => {
+          setSyncMeta((prev) => ({
+            connected: meta.connected,
+            persistence: meta.persistence || prev.persistence
+          }));
+        }
+      }
+    );
+    setSyncEngine(engine);
+
+    return () => {
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      engine.destroy();
+    };
+  }, [isAuthenticated, roomId]);
 
   useEffect(() => {
     let safetyTimer = null;
-    if (state.isSpinning && syncEngine) {
+    if (state.spin?.isSpinning && syncEngine) {
       safetyTimer = setTimeout(() => {
-        if (stateRef.current.isSpinning) {
-          console.warn('Auto-unlocking stuck spin state');
+        if (stateRef.current.spin?.isSpinning) {
           const latest = stateRef.current;
-          const finalState = {
+          syncEngine.broadcast({
             ...latest,
-            isSpinning: false
-          };
-          syncEngine.broadcast(finalState);
+            spin: {
+              ...latest.spin,
+              isSpinning: false
+            }
+          });
         }
       }, 7500);
     }
     return () => {
       if (safetyTimer) clearTimeout(safetyTimer);
     };
-  }, [state.isSpinning, syncEngine]);
+  }, [state.spin?.isSpinning, syncEngine]);
+
+  const pushUndoSnapshot = useCallback((snapshot) => {
+    undoStackRef.current = [structuredClone(snapshot), ...undoStackRef.current].slice(0, 20);
+    setUndoCount(undoStackRef.current.length);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!syncEngine || stateRef.current.spin?.isSpinning || undoStackRef.current.length === 0) return;
+    const [previous, ...rest] = undoStackRef.current;
+    undoStackRef.current = rest;
+    setUndoCount(rest.length);
+    syncEngine.broadcast({
+      ...previous,
+      spin: {
+        ...previous.spin,
+        isSpinning: false
+      }
+    });
+    toast.info(t('undoSuccess'));
+  }, [syncEngine, t]);
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -92,148 +207,233 @@ export default function ControlPanel() {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: loginPassword })
+        body: JSON.stringify({ roomId, password: loginPassword })
       });
 
       const data = await res.json();
       if (res.ok && data.success && data.token) {
-        sessionStorage.setItem(SESSION_TOKEN_KEY, data.token);
+        sessionStorage.setItem(getTokenStorageKey(roomId), data.token);
         setIsAuthenticated(true);
         setIsLoggingIn(false);
         return;
-      } else {
-        setLoginError(data.error || 'Contraseña incorrecta');
-        setIsLoggingIn(false);
-        return;
       }
-    } catch (err) {
-      setLoginError('Error al conectar con el servidor de autenticación');
+      setLoginError(data.error || 'Invalid password');
+      setIsLoggingIn(false);
+    } catch {
+      setLoginError('Failed to reach authentication server');
       setIsLoggingIn(false);
     }
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    clearStoredToken(roomId);
     setIsAuthenticated(false);
     setLoginPassword('');
   };
 
-  const triggerSpin = () => {
+  const triggerSpin = useCallback(() => {
     const current = stateRef.current;
-    if (!syncEngine || current.isSpinning || !current.remainingGames || current.remainingGames.length === 0) return;
+    if (!syncEngine || current.spin?.isSpinning || !current.items || current.items.length === 0) return;
 
-    const gamesPool = [...current.remainingGames];
-    const randomIndex = Math.floor(Math.random() * gamesPool.length);
-    const selectedGame = gamesPool[randomIndex];
-    const spinSeed = Date.now();
+    pushUndoSnapshot(current);
+    const wheelPool = current.items.map((item) => ({ ...item }));
+    const winningIndex = pickWeightedIndex(wheelPool);
+    if (winningIndex < 0) return;
 
-    const currentRotation = current.wheelRotation || 0;
-    const numSlices = gamesPool.length;
-    const sliceDeg = 360 / numSlices;
-    const targetSliceCenter = randomIndex * sliceDeg + sliceDeg / 2;
-    const desiredPointerDeg = 270;
-    const targetDeg = (desiredPointerDeg - targetSliceCenter + 360) % 360;
-    const extraSpins = 360 * 7;
-    const currentMod = currentRotation % 360;
-    const targetFinalRotation = currentRotation + extraSpins + ((targetDeg - currentMod + 360) % 360);
+    const selectedItem = wheelPool[winningIndex];
+    const spinStartedAt = Date.now();
+    const spinDurationMs = DEFAULT_SPIN_DURATION_MS;
+    const startRotation = current.spin?.targetRotation || 0;
+    const targetRotation = computeTargetRotationForLayout({
+      startRotation,
+      winningIndex,
+      items: wheelPool,
+      extraSpins: 7
+    });
 
-    const spinningState = {
-      ...current,
+    const spinPayload = {
       isSpinning: true,
-      winningIndex: randomIndex,
-      showWinnerModal: false,
-      spinSeed: spinSeed,
-      wheelGames: gamesPool,
-      wheelRotation: currentRotation
+      spinSeed: spinStartedAt,
+      spinStartedAt,
+      spinDurationMs,
+      startRotation,
+      targetRotation,
+      winningIndex,
+      wheelItems: wheelPool
     };
 
-    syncEngine.broadcast(spinningState);
+    syncEngine.broadcast({
+      ...current,
+      showWinnerModal: false,
+      spin: spinPayload
+    });
 
     if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
     spinTimerRef.current = setTimeout(() => {
       const latest = stateRef.current;
-      const remaining = (latest.remainingGames || []).filter((g) => g !== selectedGame);
-      const drawn = (latest.drawnGames || []).includes(selectedGame)
-        ? latest.drawnGames
-        : [...(latest.drawnGames || []), selectedGame];
-
-      const finalState = {
-        ...latest,
-        isSpinning: false,
-        winningIndex: null,
-        activeGame: selectedGame,
-        remainingGames: remaining,
-        drawnGames: drawn,
-        wheelGames: gamesPool,
-        wheelRotation: targetFinalRotation,
-        showWinnerModal: true,
-        spinSeed: spinSeed
+      const remaining = (latest.items || []).filter((item) => item.id !== selectedItem.id);
+      const alreadyDrawn = (latest.drawnItems || []).some((item) => item.id === selectedItem.id);
+      const drawn = alreadyDrawn
+        ? latest.drawnItems
+        : [...(latest.drawnItems || []), selectedItem];
+      const historyEntry = {
+        id: `spin-${spinStartedAt}`,
+        type: 'spin',
+        label: selectedItem.label,
+        detail: `${latest.teams[0].name} ${latest.teams[0].score} - ${latest.teams[1].score} ${latest.teams[1].name}`,
+        timestamp: Date.now()
       };
-      syncEngine.broadcast(finalState);
-      spinTimerRef.current = null;
-    }, 5400);
-  };
 
-  const updateScore = (team, delta) => {
-    if (!syncEngine) return;
+      syncEngine.broadcast({
+        ...latest,
+        items: remaining,
+        drawnItems: drawn,
+        activeItem: selectedItem,
+        showWinnerModal: true,
+        history: [historyEntry, ...(latest.history || [])].slice(0, 50),
+        spin: {
+          ...spinPayload,
+          isSpinning: false,
+          winningIndex: null
+        }
+      });
+      spinTimerRef.current = null;
+    }, spinDurationMs + 150);
+  }, [syncEngine, pushUndoSnapshot]);
+
+  const updateScore = useCallback((teamIndex, delta) => {
+    if (!syncEngine || stateRef.current.spin?.isSpinning) return;
     const latest = stateRef.current;
-    const key = team === 'fdn' ? 'fdnScore' : 'lauchangScore';
-    const newScore = Math.max(0, (latest[key] || 0) + delta);
-    const newState = {
-      ...latest,
-      [key]: newScore
+    pushUndoSnapshot(latest);
+    const updatedTeams = latest.teams.map((team, idx) => {
+      if (idx !== teamIndex) return team;
+      return { ...team, score: Math.max(0, (team.score || 0) + delta) };
+    });
+    const team = updatedTeams[teamIndex];
+    const historyEntry = {
+      id: `score-${Date.now()}`,
+      type: 'score',
+      label: `${team.name} ${delta > 0 ? `+${delta}` : delta}`,
+      detail: `${updatedTeams[0].name} ${updatedTeams[0].score} - ${updatedTeams[1].score} ${updatedTeams[1].name}`,
+      timestamp: Date.now()
     };
-    syncEngine.broadcast(newState);
+
+    syncEngine.broadcast({
+      ...latest,
+      teams: updatedTeams,
+      history: [historyEntry, ...(latest.history || [])].slice(0, 50)
+    });
+  }, [syncEngine, pushUndoSnapshot]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    const handleKeyDown = (event) => {
+      const action = resolveControlShortcut(event);
+      if (!action) return;
+      if (action === 'spin') {
+        event.preventDefault();
+        triggerSpin();
+      } else if (action === 'score-a') {
+        event.preventDefault();
+        updateScore(0, 1);
+      } else if (action === 'score-b') {
+        event.preventDefault();
+        updateScore(1, 1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAuthenticated, triggerSpin, updateScore]);
+
+  const setSoundEnabled = (enabled) => {
+    if (!syncEngine) return;
+    syncEngine.broadcast({
+      ...stateRef.current,
+      soundEnabled: Boolean(enabled)
+    });
   };
 
   const closeModal = () => {
     if (!syncEngine) return;
-    const newState = {
+    syncEngine.broadcast({
       ...stateRef.current,
       showWinnerModal: false
-    };
-    syncEngine.broadcast(newState);
+    });
   };
 
-  const removeGameFromWheel = (gameToRemove) => {
-    if (!syncEngine || state.isSpinning) return;
+  const removeItemFromWheel = (itemToRemove) => {
+    if (!syncEngine || state.spin?.isSpinning) return;
     const latest = stateRef.current;
-    const updatedRemaining = latest.remainingGames.filter((g) => g !== gameToRemove);
-    const updatedDrawn = latest.drawnGames.includes(gameToRemove) ? latest.drawnGames : [...latest.drawnGames, gameToRemove];
-    const newState = {
+    pushUndoSnapshot(latest);
+    const updatedItems = latest.items.filter((item) => item.id !== itemToRemove.id);
+    const alreadyDrawn = latest.drawnItems.some((item) => item.id === itemToRemove.id);
+    syncEngine.broadcast({
       ...latest,
-      remainingGames: updatedRemaining,
-      drawnGames: updatedDrawn
-    };
-    syncEngine.broadcast(newState);
+      items: updatedItems,
+      drawnItems: alreadyDrawn ? latest.drawnItems : [...latest.drawnItems, itemToRemove]
+    });
   };
 
-  const restoreGameToWheel = (gameToRestore) => {
-    if (!syncEngine || state.isSpinning) return;
+  const restoreItemToWheel = (itemToRestore) => {
+    if (!syncEngine || state.spin?.isSpinning) return;
     const latest = stateRef.current;
-    const updatedDrawn = latest.drawnGames.filter((g) => g !== gameToRestore);
-    const updatedRemaining = latest.remainingGames.includes(gameToRestore) ? latest.remainingGames : [...latest.remainingGames, gameToRestore];
-    const newState = {
+    pushUndoSnapshot(latest);
+    const updatedDrawn = latest.drawnItems.filter((item) => item.id !== itemToRestore.id);
+    const alreadyInWheel = latest.items.some((item) => item.id === itemToRestore.id);
+    syncEngine.broadcast({
       ...latest,
-      remainingGames: updatedRemaining,
-      drawnGames: updatedDrawn
-    };
-    syncEngine.broadcast(newState);
+      items: alreadyInWheel ? latest.items : [...latest.items, itemToRestore],
+      drawnItems: updatedDrawn
+    });
   };
 
-  const handleAddCustomGame = (e) => {
+  const handleAddCustomSegment = (e) => {
     e.preventDefault();
-    if (!syncEngine || state.isSpinning || !newGameInput.trim()) return;
-    const formatted = fixGameName(newGameInput.trim().toUpperCase());
+    if (!syncEngine || state.spin?.isSpinning || !newGameInput.trim()) return;
+    const label = newGameInput.trim().toUpperCase().slice(0, 48);
     const latest = stateRef.current;
-    if (latest.remainingGames.includes(formatted)) return;
-
-    const newState = {
-      ...latest,
-      remainingGames: [...latest.remainingGames, formatted]
+    pushUndoSnapshot(latest);
+    const newItem = {
+      id: `seg-${Date.now()}`,
+      label,
+      color: newGameColor || SLICE_COLORS[latest.items.length % SLICE_COLORS.length].toLowerCase(),
+      imageUrl: sanitizeMediaUrl(newGameImageUrl),
+      weight: Math.max(1, Math.min(10, Number(newGameWeight) || 1))
     };
-    syncEngine.broadcast(newState);
+
+    syncEngine.broadcast({
+      ...latest,
+      items: [...latest.items, newItem]
+    });
     setNewGameInput('');
+    setNewGameImageUrl('');
+    setNewGameWeight(1);
+    toast.success(t('segmentAdded'), { description: label });
+  };
+
+  const updateRoomSetting = (patch) => {
+    if (!syncEngine) return;
+    syncEngine.broadcast({
+      ...stateRef.current,
+      ...patch
+    });
+  };
+
+  const updateTeamMeta = (teamIndex, field, value) => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    const updatedTeams = latest.teams.map((team, idx) => {
+      if (idx !== teamIndex) return team;
+      const next = { ...team, [field]: field === 'logoUrl' ? sanitizeMediaUrl(value) : value };
+      if (field === 'color') {
+        next.textColor = pickContrastingTextColor(value);
+      }
+      return next;
+    });
+    syncEngine.broadcast({
+      ...latest,
+      teams: updatedTeams
+    });
   };
 
   const confirmResetAll = () => {
@@ -242,54 +442,67 @@ export default function ControlPanel() {
       clearTimeout(spinTimerRef.current);
       spinTimerRef.current = null;
     }
-    const newState = {
-      remainingGames: [...INITIAL_GAMES],
-      drawnGames: [],
-      wheelGames: null,
-      wheelRotation: 0,
-      fdnScore: 0,
-      lauchangScore: 0,
-      activeGame: null,
-      isSpinning: false,
-      winningIndex: null,
+    const latest = stateRef.current;
+    pushUndoSnapshot(latest);
+    const restoredItems = [...latest.items, ...latest.drawnItems];
+    const fallbackPreset = createPresetRoomState(roomId === DEFAULT_ROOM_ID ? DEFAULT_ROOM_ID : 'bo5-showmatch', { roomId });
+    syncEngine.broadcast({
+      ...latest,
+      teams: latest.teams.map((team) => ({ ...team, score: 0 })),
+      items: restoredItems.length > 0 ? restoredItems : fallbackPreset.items,
+      drawnItems: [],
+      activeItem: null,
+      history: [],
       showWinnerModal: false,
-      spinSeed: 0
-    };
-    syncEngine.broadcast(newState);
-    setShowResetConfirmModal(false);
+      spin: {
+        isSpinning: false,
+        spinSeed: 0,
+        spinStartedAt: 0,
+        spinDurationMs: DEFAULT_SPIN_DURATION_MS,
+        startRotation: 0,
+        targetRotation: 0,
+        winningIndex: null,
+        wheelItems: []
+      }
+    });
+    toast.success(t('resetSuccess'));
+  };
+
+  const copyObsUrl = async (path, label) => {
+    const fullUrl = `${window.location.origin}${path}`;
+    try {
+      await navigator.clipboard.writeText(fullUrl);
+      toast.success(t('copied'), { description: `${label} · ${fullUrl}` });
+    } catch {
+      toast.info(label, { description: fullUrl });
+    }
   };
 
   if (!isAuthenticated) {
     return (
       <div className="admin-page-bg" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <div className="card-panel" style={{ maxWidth: 420, width: '100%', textAlign: 'center', borderColor: 'var(--border-highlight)' }}>
-          <div style={{ display: 'inline-flex', padding: 14, borderRadius: '50%', backgroundColor: 'var(--panel-surface)', color: 'var(--accent-gold)', marginBottom: 20 }}>
-            <Lock size={32} />
+          <div style={{ display: 'inline-flex', padding: 14, borderRadius: '50%', backgroundColor: 'var(--panel-surface)', color: 'var(--accent-gold)', marginBottom: 18 }}>
+            <Lock size={30} />
           </div>
 
-          <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Panel de Control Protegido</h2>
+          <div className="pill-badge badge-dark" style={{ marginBottom: 12 }}>
+            ROOM · {roomId}
+          </div>
+          <h2 style={{ fontSize: 23, fontWeight: 900, marginBottom: 8 }}>{t('protectedTitle')}</h2>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
-            Ingrese la contraseña del administrador para acceder.
+            {t('protectedDesc')}
           </p>
 
           <form onSubmit={handleLoginSubmit}>
             <div style={{ marginBottom: 16, position: 'relative' }}>
               <input
                 type="password"
-                placeholder="Contraseña de administrador..."
+                placeholder={t('pinPlaceholder')}
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '12px 16px 12px 42px',
-                  borderRadius: 9999,
-                  backgroundColor: 'var(--panel-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  color: '#ffffff',
-                  outline: 'none',
-                  fontSize: 14,
-                  fontWeight: 600
-                }}
+                className="studio-input"
+                style={{ paddingLeft: 42, borderRadius: 9999 }}
               />
               <KeyRound size={18} color="var(--text-muted)" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
             </div>
@@ -301,269 +514,525 @@ export default function ControlPanel() {
             )}
 
             <button type="submit" className="btn-white" style={{ width: '100%', padding: '12px' }} disabled={isLoggingIn}>
-              {isLoggingIn ? 'Verificando...' : 'Iniciar Sesión'}
+              {isLoggingIn ? t('verifying') : t('unlockPanel')}
             </button>
           </form>
+
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ width: '100%', marginTop: 12 }}
+            onClick={() => navigateTo('/')}
+          >
+            <Home size={15} /> {t('backToHub')}
+          </button>
         </div>
       </div>
     );
   }
 
+  const isSpinning = Boolean(state.spin?.isSpinning);
+  const teamA = state.teams[0];
+  const teamB = state.teams[1];
+  const winsNeeded = state.bestOf > 0 ? Math.ceil(state.bestOf / 2) : 0;
+  const fullRouletteUrl = `${window.location.origin}${roomUrls.roulette}`;
+  const fullScoreboardUrl = `${window.location.origin}${roomUrls.scoreboard}`;
+
   return (
-    <div className="admin-page-bg" style={{ padding: '32px 16px', position: 'relative' }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
+    <div className="admin-page-bg" style={{ padding: '24px 16px 56px', position: 'relative' }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, flexWrap: 'wrap', gap: 16 }}>
           <div>
-            <div className="pill-badge badge-dark" style={{ marginBottom: 8 }}>
-              CONTROL EN VIVO
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="pill-badge badge-dark" onClick={() => navigateTo('/')} style={{ cursor: 'pointer' }}>
+                <Home size={13} /> {t('hub')}
+              </button>
+              <span className="pill-badge badge-dark">ROOM · {roomId}</span>
+              <span
+                className="pill-badge badge-dark"
+                style={{
+                  borderColor: !syncMeta.connected
+                    ? 'var(--accent-red)'
+                    : syncMeta.persistence === 'redis'
+                      ? 'var(--accent-green)'
+                      : 'var(--accent-gold)'
+                }}
+              >
+                <Database size={12} />
+                {!syncMeta.connected
+                  ? t('offlineMode')
+                  : syncMeta.persistence === 'redis'
+                    ? t('redisSync')
+                    : t('memoryMode')}
+              </span>
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: -0.5 }}>
-              FDN VS LAUCHANG : DASHBOARD STREAM
+              {state.title}
             </h1>
           </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <a
-              href="/roulette"
-              target="_blank"
-              rel="noreferrer"
-              className="btn-secondary"
-            >
-              Overlay Ruleta <ExternalLink size={16} />
-            </a>
-            <a
-              href="/scoreboard"
-              target="_blank"
-              rel="noreferrer"
-              className="btn-secondary"
-            >
-              Overlay Marcador <ExternalLink size={16} />
-            </a>
-            <button className="btn-danger" onClick={handleLogout} style={{ padding: '8px 16px' }}>
-              <LogOut size={16} /> Salir
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <label className="studio-switch-label">
+              <Volume2 size={15} color="var(--accent-gold)" />
+              <span>{t('audioOn')}</span>
+              <Switch
+                className="studio-switch"
+                checked={state.soundEnabled !== false}
+                onCheckedChange={setSoundEnabled}
+              >
+                <SwitchThumb className="studio-switch-thumb" />
+              </Switch>
+            </label>
+
+            <div className="lang-toggle" role="group" aria-label="Language">
+              <Languages size={14} color="var(--accent-gold)" />
+              <button type="button" className={lang === 'en' ? 'lang-btn lang-btn-active' : 'lang-btn'} onClick={() => setLang('en')}>EN</button>
+              <button type="button" className={lang === 'es' ? 'lang-btn lang-btn-active' : 'lang-btn'} onClick={() => setLang('es')}>ES</button>
+            </div>
+
+            <button type="button" className="btn-danger" onClick={handleLogout} style={{ padding: '8px 16px' }}>
+              <LogOut size={15} /> {t('logout')}
             </button>
           </div>
         </header>
 
-        <div className="responsive-grid-2" style={{ marginBottom: 32 }}>
-          <div className="card-panel">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <FdnLogo size={52} />
-                <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>FDN</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>TEAM FEEDEN</p>
+        {syncMeta.persistence === 'memory' && (
+          <div className="memory-banner" role="status">
+            <AlertTriangle size={16} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+            <span>{t('memoryWarning')}</span>
+          </div>
+        )}
+
+        <Tabs defaultValue="live" className="studio-tabs">
+          <TabsList aria-label="Control Sections" className="studio-tabs-list">
+            <TabsTab value="live" className="studio-tab">
+              <Dices size={15} /> {t('tabLive')}
+            </TabsTab>
+            <TabsTab value="obs" className="studio-tab">
+              <MonitorPlay size={15} /> {t('tabObs')}
+            </TabsTab>
+            <TabsTab value="history" className="studio-tab">
+              <History size={15} /> {t('tabHistory')} ({state.history?.length || 0})
+            </TabsTab>
+            <TabsTab value="branding" className="studio-tab">
+              <Settings size={15} /> {t('tabSettings')}
+            </TabsTab>
+            <TabsIndicator className="studio-tabs-indicator" />
+          </TabsList>
+
+          <TabsPanel value="live">
+            <div className="responsive-grid-2" style={{ marginBottom: 24 }}>
+              {[teamA, teamB].map((team, idx) => (
+                <div key={team.id} className="card-panel" style={{ borderTop: `3px solid ${team.color}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <TeamAvatar
+                        name={team.name}
+                        logoUrl={team.logoUrl}
+                        color={team.color}
+                        textColor={team.textColor}
+                        size={54}
+                      />
+                      <div>
+                        <h2 style={{ fontSize: 20, fontWeight: 800 }}>{team.name}</h2>
+                        <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                          {team.subtitle || (idx === 0 ? 'TEAM A' : 'TEAM B')}
+                          {winsNeeded > 0 ? ` · ${t('firstTo')} ${winsNeeded}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
+                      {team.score}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ flex: 1, opacity: isSpinning ? 0.5 : 1 }}
+                      disabled={isSpinning}
+                      onClick={() => updateScore(idx, 1)}
+                    >
+                      <Plus size={18} color="var(--accent-gold)" /> {t('scorePlusOne')}
+                      <kbd className="kbd-chip">{idx + 1}</kbd>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ opacity: isSpinning ? 0.5 : 1 }}
+                      disabled={isSpinning}
+                      aria-label={`Decrease ${team.name} score`}
+                      onClick={() => updateScore(idx, -1)}
+                    >
+                      <Minus size={18} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="responsive-grid-main">
+              <div className="card-panel">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Dices size={22} color="var(--accent-gold)" /> {t('rouletteActions')}
+                  </h2>
+                  <span className="pill-badge badge-dark">
+                    {t('remaining')}: {state.items.length}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                  <button
+                    type="button"
+                    className="btn-white"
+                    style={{ flex: 1, padding: '16px 24px', fontSize: 16 }}
+                    disabled={isSpinning || state.items.length === 0}
+                    onClick={triggerSpin}
+                  >
+                    <Play size={20} fill="currentColor" /> {isSpinning ? t('spinning') : t('spinWheel')}
+                    <kbd className="kbd-chip kbd-chip-dark">Space</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    disabled={isSpinning || undoCount === 0}
+                    style={{ opacity: isSpinning || undoCount === 0 ? 0.45 : 1 }}
+                    onClick={handleUndo}
+                  >
+                    <Undo2 size={17} /> {t('undo')}
+                  </button>
+                </div>
+
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 18 }}>
+                  <Keyboard size={14} color="var(--accent-gold)" /> {t('shortcutsHint')}
+                </div>
+
+                {state.activeItem && (
+                  <div style={{ padding: 16, backgroundColor: 'var(--panel-surface)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>{t('activeSegment')}</span>
+                      <h3 style={{ fontSize: 22, fontWeight: 900 }}>{state.activeItem.label}</h3>
+                    </div>
+                    {state.showWinnerModal ? (
+                      <button type="button" className="btn-secondary" onClick={closeModal}>
+                        {t('hideWinnerCard')}
+                      </button>
+                    ) : (
+                      <span className="pill-badge badge-dark">{t('active')}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="card-panel">
+                <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Trophy size={22} color="var(--accent-gold)" /> {t('wheelSegments')}
+                </h2>
+
+                <form onSubmit={handleAddCustomSegment} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="color"
+                      aria-label="New segment color"
+                      value={newGameColor}
+                      onChange={(e) => setNewGameColor(e.target.value)}
+                      disabled={isSpinning}
+                      style={{ width: 38, height: 38, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                    />
+                    <input
+                      type="text"
+                      placeholder={t('newSegmentPlaceholder')}
+                      value={newGameInput}
+                      disabled={isSpinning}
+                      onChange={(e) => setNewGameInput(e.target.value)}
+                      className="studio-input"
+                      style={{ flex: 1 }}
+                    />
+                    <select
+                      className="studio-input"
+                      aria-label="New segment weight"
+                      value={newGameWeight}
+                      disabled={isSpinning}
+                      onChange={(e) => setNewGameWeight(Number(e.target.value))}
+                      style={{ width: 68 }}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 8, 10].map((w) => (
+                        <option key={w} value={w}>{w}x</option>
+                      ))}
+                    </select>
+                    <button type="submit" className="btn-secondary" disabled={isSpinning} style={{ padding: '8px 14px' }}>
+                      <Plus size={16} /> {t('add')}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Optional https:// banner image URL"
+                    value={newGameImageUrl}
+                    disabled={isSpinning}
+                    onChange={(e) => setNewGameImageUrl(e.target.value)}
+                    className="studio-input"
+                  />
+                </form>
+
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
+                    {t('onWheel')}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {state.items.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className="pill-badge badge-dark"
+                        disabled={isSpinning}
+                        onClick={() => removeItemFromWheel(item)}
+                        style={{ cursor: isSpinning ? 'not-allowed' : 'pointer', opacity: isSpinning ? 0.5 : 1 }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.color }} />
+                        {item.label}
+                        {item.weight > 1 ? ` (${item.weight}x)` : ''}
+                        <Trash2 size={12} style={{ opacity: 0.8 }} />
+                      </button>
+                    ))}
+                    {state.items.length === 0 && (
+                      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('wheelEmpty')}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
+                    {t('drawn')}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {state.drawnItems.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className="pill-badge badge-dark"
+                        disabled={isSpinning}
+                        onClick={() => restoreItemToWheel(item)}
+                        style={{ cursor: isSpinning ? 'not-allowed' : 'pointer', opacity: isSpinning ? 0.5 : 1 }}
+                      >
+                        <CheckCircle2 size={12} /> {item.label} <RotateCw size={12} style={{ marginLeft: 4 }} />
+                      </button>
+                    ))}
+                    {state.drawnItems.length === 0 && (
+                      <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('noneYet')}</span>
+                    )}
+                  </div>
+                </div>
+
+                <AlertDialog
+                  onOpenChange={(open, details) => {
+                    if (!open && details.returnValue === 'confirm') {
+                      confirmResetAll();
+                    }
+                  }}
+                >
+                  <AlertDialogTrigger className="btn-danger" style={{ width: '100%', justifyContent: 'center' }}>
+                    <RotateCcw size={16} /> {t('resetAll')}
+                  </AlertDialogTrigger>
+                  <AlertDialogBackdrop className="studio-dialog-backdrop" />
+                  <AlertDialogContent className="studio-dialog-content">
+                    <div style={{ display: 'inline-flex', padding: 12, borderRadius: '50%', backgroundColor: 'rgba(201, 50, 50, 0.15)', color: 'var(--accent-red)', marginBottom: 14 }}>
+                      <AlertTriangle size={28} />
+                    </div>
+                    <AlertDialogTitle style={{ fontSize: 21, fontWeight: 900, marginBottom: 10 }}>
+                      {t('resetConfirmTitle')}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 22, lineHeight: 1.5 }}>
+                      {t('resetConfirmDesc')}
+                    </AlertDialogDescription>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      <AlertDialogClose className="btn-secondary" style={{ flex: 1 }}>
+                        {t('cancel')}
+                      </AlertDialogClose>
+                      <AlertDialogClose value="confirm" className="btn-danger" style={{ flex: 1, justifyContent: 'center' }}>
+                        {t('yesReset')}
+                      </AlertDialogClose>
+                    </div>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </TabsPanel>
+
+          <TabsPanel value="obs">
+            <div className="responsive-grid-2" style={{ marginBottom: 24 }}>
+              <div className="card-panel">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Dices size={18} color="var(--accent-gold)" /> {t('rouletteOverlay')}
+                  </h3>
+                  <span className="pill-badge badge-dark">600 × 600 px</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  {t('recommendedSize')}: <strong>600 × 600</strong> (transparent background)
+                </p>
+                <div className="obs-url-box">{fullRouletteUrl}</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                  <button type="button" className="btn-white" style={{ flex: 1 }} onClick={() => copyObsUrl(roomUrls.roulette, 'Roulette (600×600)')}>
+                    <Copy size={15} /> {t('copyUrl')}
+                  </button>
+                  <a href={roomUrls.roulette} target="_blank" rel="noreferrer" className="btn-secondary">
+                    {t('openPreview')} <ExternalLink size={14} />
+                  </a>
                 </div>
               </div>
-              <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
-                {state.fdnScore}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                className="btn-secondary"
-                style={{ flex: 1, opacity: state.isSpinning ? 0.5 : 1 }}
-                disabled={state.isSpinning}
-                onClick={() => updateScore('fdn', 1)}
-              >
-                <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ opacity: state.isSpinning ? 0.5 : 1 }}
-                disabled={state.isSpinning}
-                onClick={() => updateScore('fdn', -1)}
-              >
-                <Minus size={18} />
-              </button>
-            </div>
-          </div>
 
-          <div className="card-panel">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <LauchangLogo size={52} />
-                <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800 }}>LAUCHANG</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>TEAM LAUTASHE</p>
+              <div className="card-panel">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Trophy size={18} color="var(--accent-gold)" /> {t('scoreboardOverlay')}
+                  </h3>
+                  <span className="pill-badge badge-dark">920 × 220 px</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+                  {t('recommendedSize')}: <strong>920 × 220</strong> (transparent background)
+                </p>
+                <div className="obs-url-box">{fullScoreboardUrl}</div>
+                <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                  <button type="button" className="btn-white" style={{ flex: 1 }} onClick={() => copyObsUrl(roomUrls.scoreboard, 'Scoreboard (920×220)')}>
+                    <Copy size={15} /> {t('copyUrl')}
+                  </button>
+                  <a href={roomUrls.scoreboard} target="_blank" rel="noreferrer" className="btn-secondary">
+                    {t('openPreview')} <ExternalLink size={14} />
+                  </a>
                 </div>
               </div>
-              <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
-                {state.lauchangScore}
+            </div>
+
+            <div className="card-panel">
+              <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <MonitorPlay size={18} color="var(--accent-gold)" /> {t('liveMiniPreview')}
+              </h3>
+              <div className="mini-preview-stage">
+                <div style={{ width: '100%', maxWidth: 660, margin: '0 auto 22px' }}>
+                  <ScoreboardGraphic state={state} compact />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <RouletteWheel
+                    items={state.items}
+                    teams={state.teams}
+                    title={state.title}
+                    spin={state.spin}
+                    showWinnerModal={state.showWinnerModal}
+                    activeItem={state.activeItem}
+                    soundEnabled={false}
+                    size={280}
+                  />
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button
-                className="btn-secondary"
-                style={{ flex: 1, opacity: state.isSpinning ? 0.5 : 1 }}
-                disabled={state.isSpinning}
-                onClick={() => updateScore('lauchang', 1)}
-              >
-                <Plus size={18} color="var(--accent-gold)" /> Puntuar +1
-              </button>
-              <button
-                className="btn-secondary"
-                style={{ opacity: state.isSpinning ? 0.5 : 1 }}
-                disabled={state.isSpinning}
-                onClick={() => updateScore('lauchang', -1)}
-              >
-                <Minus size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
+          </TabsPanel>
 
-        <div className="responsive-grid-main">
-          <div className="card-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Dices size={22} color="var(--accent-gold)" /> Acciones de Ruleta
+          <TabsPanel value="history">
+            <div className="card-panel">
+              <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <History size={20} color="var(--accent-gold)" /> {t('tabHistory')}
               </h2>
-              <span className="pill-badge badge-dark">
-                Restantes: {state.remainingGames.length}
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-              <button
-                className="btn-white"
-                style={{ flex: 1, padding: '16px 24px', fontSize: 16 }}
-                disabled={state.isSpinning || state.remainingGames.length === 0}
-                onClick={triggerSpin}
-              >
-                <Play size={20} fill="currentColor" /> {state.isSpinning ? 'Girando...' : 'GIRAR RULETA'}
-              </button>
-            </div>
-
-            {state.activeGame && (
-              <div style={{ padding: 16, backgroundColor: 'var(--panel-surface)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Juego Actual</span>
-                  <h3 style={{ fontSize: 22, fontWeight: 900 }}>{state.activeGame}</h3>
+              {(!state.history || state.history.length === 0) ? (
+                <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>{t('noHistory')}</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {state.history.map((entry) => (
+                    <div key={entry.id} className="history-row">
+                      <span className="pill-badge badge-dark" style={{ fontSize: 11, textTransform: 'uppercase' }}>
+                        {entry.type}
+                      </span>
+                      <strong style={{ fontSize: 14 }}>{entry.label}</strong>
+                      <span style={{ fontSize: 13, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                        {entry.detail}
+                      </span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                {state.showWinnerModal ? (
-                  <button className="btn-secondary" onClick={closeModal}>
-                    Ocultar Modal
-                  </button>
-                ) : (
-                  <span className="pill-badge badge-dark">En juego</span>
-                )}
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </TabsPanel>
 
-          <div className="card-panel">
-            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Trophy size={22} color="var(--accent-gold)" /> Gestión de Juegos
-            </h2>
+          <TabsPanel value="branding">
+            <div className="card-panel">
+              <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Settings size={20} color="var(--accent-gold)" /> {t('tabSettings')}
+              </h2>
 
-            <form onSubmit={handleAddCustomGame} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-              <input
-                type="text"
-                placeholder="Añadir nuevo juego..."
-                value={newGameInput}
-                disabled={state.isSpinning}
-                onChange={(e) => setNewGameInput(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: '10px 14px',
-                  borderRadius: 9999,
-                  backgroundColor: 'var(--panel-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  color: '#ffffff',
-                  outline: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  opacity: state.isSpinning ? 0.5 : 1
-                }}
-              />
-              <button type="submit" className="btn-secondary" disabled={state.isSpinning} style={{ padding: '10px 16px', opacity: state.isSpinning ? 0.5 : 1 }}>
-                <Plus size={16} /> Añadir
-              </button>
-            </form>
-
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
-                En Ruleta (haz clic para quitar):
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {state.remainingGames.map((game) => (
-                  <button
-                    key={game}
-                    className="pill-badge badge-dark"
-                    disabled={state.isSpinning}
-                    onClick={() => removeGameFromWheel(game)}
-                    title="Haz clic para quitar de la ruleta"
-                    style={{ cursor: state.isSpinning ? 'not-allowed' : 'pointer', opacity: state.isSpinning ? 0.5 : 1 }}
+              <div className="responsive-grid-2" style={{ marginBottom: 18 }}>
+                <label className="studio-field">
+                  <span>{t('eventTitle')}</span>
+                  <input
+                    type="text"
+                    className="studio-input"
+                    value={state.title}
+                    onChange={(e) => updateRoomSetting({ title: e.target.value })}
+                    maxLength={64}
+                  />
+                </label>
+                <label className="studio-field">
+                  <span>{t('matchFormat')}</span>
+                  <select
+                    className="studio-input"
+                    value={state.bestOf}
+                    onChange={(e) => updateRoomSetting({ bestOf: Number(e.target.value) })}
                   >
-                    {game} <Trash2 size={12} style={{ opacity: 0.8 }} />
-                  </button>
+                    <option value={0}>{t('freeplay')}</option>
+                    <option value={3}>Best of 3</option>
+                    <option value={5}>Best of 5</option>
+                    <option value={7}>Best of 7</option>
+                    <option value={9}>Best of 9</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="responsive-grid-2">
+                {state.teams.map((team, idx) => (
+                  <div key={team.id} className="card-panel-active" style={{ padding: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <TeamAvatar name={team.name} logoUrl={team.logoUrl} color={team.color} textColor={team.textColor} size={42} />
+                      <strong style={{ fontSize: 15 }}>{idx === 0 ? 'Team A' : 'Team B'}</strong>
+                      <input
+                        type="color"
+                        aria-label={`${team.name} color`}
+                        value={team.color}
+                        onChange={(e) => updateTeamMeta(idx, 'color', e.target.value)}
+                        style={{ marginLeft: 'auto', width: 38, height: 32, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                      <input
+                        type="text"
+                        className="studio-input"
+                        value={team.name}
+                        onChange={(e) => updateTeamMeta(idx, 'name', e.target.value)}
+                        placeholder="Team Name"
+                      />
+                      <input
+                        type="text"
+                        className="studio-input"
+                        value={team.subtitle}
+                        onChange={(e) => updateTeamMeta(idx, 'subtitle', e.target.value)}
+                        placeholder="Subtitle"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      className="studio-input"
+                      value={team.logoUrl}
+                      onChange={(e) => updateTeamMeta(idx, 'logoUrl', e.target.value)}
+                      placeholder="Logo URL (https://... or /...)"
+                    />
+                  </div>
                 ))}
-                {state.remainingGames.length === 0 && (
-                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ninguno en ruleta</span>
-                )}
               </div>
             </div>
-
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>
-                Eliminados (haz clic para restaurar):
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {state.drawnGames.map((game) => (
-                  <button
-                    key={game}
-                    className="pill-badge badge-dark"
-                    disabled={state.isSpinning}
-                    onClick={() => restoreGameToWheel(game)}
-                    title="Haz clic para devolver a la ruleta"
-                    style={{ cursor: state.isSpinning ? 'not-allowed' : 'pointer', opacity: state.isSpinning ? 0.5 : 1 }}
-                  >
-                    <CheckCircle2 size={12} /> {game} <RotateCw size={12} style={{ marginLeft: 4 }} />
-                  </button>
-                ))}
-                {state.drawnGames.length === 0 && (
-                  <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>Ninguno aún</span>
-                )}
-              </div>
-            </div>
-
-            <button className="btn-danger" style={{ width: '100%' }} onClick={() => setShowResetConfirmModal(true)}>
-              <RotateCcw size={16} /> Reiniciar Todo el Evento
-            </button>
-          </div>
-        </div>
+          </TabsPanel>
+        </Tabs>
       </div>
-
-      {showResetConfirmModal && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(6, 10, 8, 0.88)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: 20
-        }}>
-          <div className="card-panel" style={{ maxWidth: 440, width: '100%', textAlign: 'center', borderColor: 'var(--accent-red)' }}>
-            <div style={{ display: 'inline-flex', padding: 12, borderRadius: '50%', backgroundColor: 'rgba(201, 50, 50, 0.15)', color: 'var(--accent-red)', marginBottom: 16 }}>
-              <AlertTriangle size={32} />
-            </div>
-            <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 12 }}>¿Reiniciar Todo el Evento?</h2>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
-              Esta acción restaurará todos los juegos a la ruleta y reiniciará los marcadores de FDN y Lauchang a 0.
-            </p>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button className="btn-secondary" style={{ flex: 1 }} onClick={() => setShowResetConfirmModal(false)}>
-                Cancelar
-              </button>
-              <button className="btn-danger" style={{ flex: 1, justifyContent: 'center' }} onClick={confirmResetAll}>
-                Sí, Reiniciar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,57 +1,66 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
-import { fixGameName } from '../lib/sync';
-
-const SLICE_COLORS = [
-  '#D99B26',
-  '#0D9F67',
-  '#C93232',
-  '#16201C',
-  '#0D9F67'
-];
-
-const GAME_IMAGE_MAP = {
-  'FORTNITE': '/games/fortnitebanner.jpg',
-  'CLASH ROYALE': '/games/clashroyalebanner.jpg',
-  'COPA ROBLOX': '/games/robloxbanner.png',
-  'COUNTER-STRIKE 2': '/games/counterstrikebanner.jpg',
-  'COUNTER STRIKE': '/games/counterstrikebanner.jpg',
-  'CS': '/games/counterstrikebanner.jpg',
-  'FALL GUYS': '/games/fallguysbanner.jpg'
-};
+import TeamAvatar from './TeamAvatar';
+import {
+  DEFAULT_SPIN_DURATION_MS,
+  SLICE_COLORS,
+  computeSliceLayout,
+  computeTargetRotationForLayout,
+  getSliceIndexAtPointerForLayout,
+  interpolateSpinRotation,
+  resolveSliceImage
+} from '../lib/wheel';
+import { playTickSound, playVictoryFanfare } from '../lib/audio';
 
 export default function RouletteWheel({
-  remainingGames,
-  wheelGames,
-  wheelRotation = 0,
-  isSpinning,
-  winningIndex,
-  spinSeed,
+  items = [],
+  teams = [],
+  title = 'ARENAOBS',
+  spin = {},
+  showWinnerModal = false,
+  activeItem = null,
+  soundEnabled = true,
   onSpinEnd,
-  showWinnerModal,
-  activeGame,
-  onCloseModal,
   size = 520
 }) {
   const canvasRef = useRef(null);
-  const [rotation, setRotation] = useState(wheelRotation || 0);
+  const isSpinning = Boolean(spin.isSpinning);
+  const wheelItems = Array.isArray(spin.wheelItems) && spin.wheelItems.length > 0 ? spin.wheelItems : items;
+  const startRotation = typeof spin.startRotation === 'number' ? spin.startRotation : 0;
+  const targetRotation = typeof spin.targetRotation === 'number' ? spin.targetRotation : 0;
+  const spinStartedAt = typeof spin.spinStartedAt === 'number' ? spin.spinStartedAt : 0;
+  const spinDurationMs = typeof spin.spinDurationMs === 'number' && spin.spinDurationMs > 0
+    ? spin.spinDurationMs
+    : DEFAULT_SPIN_DURATION_MS;
+  const winningIndex = typeof spin.winningIndex === 'number' ? spin.winningIndex : null;
+  const spinSeed = spin.spinSeed || 0;
+
+  const [rotation, setRotation] = useState(targetRotation);
   const [isTicking, setIsTicking] = useState(false);
   const [activeLogoIndex, setActiveLogoIndex] = useState(0);
   const [loadedImages, setLoadedImages] = useState({});
   const animRef = useRef(null);
+  const tickTimerRef = useRef(null);
   const prevSliceIndexRef = useRef(-1);
-  const activeSpinSeedRef = useRef(null);
+  const celebratedSeedRef = useRef(null);
+  const soundEnabledRef = useRef(soundEnabled);
 
   useEffect(() => {
-    if (!isSpinning && typeof wheelRotation === 'number') {
-      setRotation(wheelRotation);
-    }
-  }, [wheelRotation, isSpinning]);
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
 
-  const displayedGames = (isSpinning
-    ? remainingGames
-    : (wheelGames && wheelGames.length > 0 ? wheelGames : remainingGames)
-  ).map(fixGameName);
+  const displayedItems = useMemo(() => {
+    const source = isSpinning || (wheelItems && wheelItems.length > 0) ? wheelItems : items;
+    return Array.isArray(source) ? source : [];
+  }, [isSpinning, wheelItems, items]);
+
+  const sliceLayout = useMemo(() => computeSliceLayout(displayedItems), [displayedItems]);
+
+  useEffect(() => {
+    if (!isSpinning) {
+      setRotation(targetRotation);
+    }
+  }, [targetRotation, isSpinning]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -61,14 +70,24 @@ export default function RouletteWheel({
   }, []);
 
   useEffect(() => {
-    Object.entries(GAME_IMAGE_MAP).forEach(([gameKey, src]) => {
+    const urls = new Set();
+    displayedItems.forEach((item) => {
+      const url = resolveSliceImage(item);
+      if (url) {
+        urls.add(url);
+      }
+    });
+
+    urls.forEach((src) => {
+      if (loadedImages[src]) return;
       const img = new Image();
+      img.crossOrigin = 'anonymous';
       img.src = src;
       img.onload = () => {
-        setLoadedImages((prev) => ({ ...prev, [gameKey]: img }));
+        setLoadedImages((prev) => (prev[src] ? prev : { ...prev, [src]: img }));
       };
     });
-  }, []);
+  }, [displayedItems, loadedImages]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -83,7 +102,7 @@ export default function RouletteWheel({
 
     ctx.clearRect(0, 0, width, height);
 
-    if (!displayedGames || displayedGames.length === 0) {
+    if (sliceLayout.length === 0) {
       ctx.beginPath();
       ctx.arc(centerX, centerY, outerRadius, 0, Math.PI * 2);
       ctx.fillStyle = '#121917';
@@ -93,15 +112,12 @@ export default function RouletteWheel({
       ctx.stroke();
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = '900 20px "Plus Jakarta Sans", sans-serif';
+      ctx.font = `900 ${Math.round(size * 0.038)}px "Plus Jakarta Sans", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('¡TODOS LOS JUEGOS JUGADOS!', centerX, centerY);
+      ctx.fillText('ALL SEGMENTS DRAWN', centerX, centerY);
       return;
     }
-
-    const numSlices = displayedGames.length;
-    const sliceAngle = (Math.PI * 2) / numSlices;
 
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -126,9 +142,9 @@ export default function RouletteWheel({
       const pinAngle = (p * Math.PI * 2) / pinCount;
       const px = (outerRadius - 9) * Math.cos(pinAngle);
       const py = (outerRadius - 9) * Math.sin(pinAngle);
-      
+
       ctx.beginPath();
-      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(3, size * 0.0095), 0, Math.PI * 2);
       ctx.fillStyle = '#d99b26';
       ctx.fill();
       ctx.strokeStyle = '#080d0b';
@@ -136,11 +152,13 @@ export default function RouletteWheel({
       ctx.stroke();
     }
 
-    for (let i = 0; i < numSlices; i++) {
-      const rawGameName = displayedGames[i];
-      const gameName = fixGameName(rawGameName);
-      const startAngle = i * sliceAngle;
-      const endAngle = startAngle + sliceAngle;
+    sliceLayout.forEach((slice, i) => {
+      const entry = slice.item;
+      const label = typeof entry === 'string' ? entry : String(entry?.label || '');
+      const sliceColor = (typeof entry === 'object' && entry?.color) || SLICE_COLORS[i % SLICE_COLORS.length];
+      const startAngle = (slice.startDeg * Math.PI) / 180;
+      const endAngle = (slice.endDeg * Math.PI) / 180;
+      const midAngle = (slice.midDeg * Math.PI) / 180;
 
       ctx.save();
       ctx.beginPath();
@@ -149,23 +167,30 @@ export default function RouletteWheel({
       ctx.closePath();
       ctx.clip();
 
-      ctx.fillStyle = SLICE_COLORS[i % SLICE_COLORS.length];
+      const grad = ctx.createRadialGradient(0, 0, 18, 0, 0, innerRadius);
+      grad.addColorStop(0, '#0f1714');
+      grad.addColorStop(0.28, sliceColor);
+      grad.addColorStop(1, sliceColor);
+      ctx.fillStyle = grad;
       ctx.fill();
 
-      const gameImg = loadedImages[gameName] || loadedImages[rawGameName] || loadedImages['CS'] || loadedImages['COUNTER STRIKE'];
+      const imageUrl = resolveSliceImage(entry);
+      const gameImg = imageUrl ? loadedImages[imageUrl] : null;
       if (gameImg && gameImg.width > 0 && gameImg.height > 0) {
         ctx.save();
-        ctx.rotate(startAngle + sliceAngle / 2);
+        ctx.rotate(midAngle);
         ctx.globalAlpha = 0.88;
 
         const dw = innerRadius * 1.5;
         const dh = innerRadius * 1.5;
         const dist = innerRadius * 0.55;
-
         const imgRatio = gameImg.width / gameImg.height;
         const destRatio = dw / dh;
 
-        let sw, sh, sx, sy;
+        let sw;
+        let sh;
+        let sx;
+        let sy;
         if (imgRatio > destRatio) {
           sw = gameImg.height * destRatio;
           sh = gameImg.height;
@@ -184,6 +209,13 @@ export default function RouletteWheel({
 
         ctx.fillStyle = 'rgba(8, 12, 10, 0.35)';
         ctx.fill();
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.beginPath();
+        ctx.arc(0, 0, innerRadius * 0.86, startAngle, endAngle);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.fill();
       }
 
       ctx.beginPath();
@@ -194,91 +226,122 @@ export default function RouletteWheel({
       ctx.stroke();
 
       ctx.save();
-      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.rotate(midAngle);
 
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
 
-      const fontSize = gameName.length > 13 ? 13.5 : 16;
-      const textOffset = gameName.length > 13 ? 14 : 22;
+      const scale = size / 520;
+      const baseFont = label.length > 14 ? 12.5 : label.length > 11 ? 14 : 16;
+      const fontSize = Math.max(9, baseFont * scale);
+      const textOffset = (label.length > 13 ? 14 : 22) * scale;
       ctx.font = `900 ${fontSize}px "Plus Jakarta Sans", sans-serif`;
-      
+
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = Math.max(3, 6 * scale);
       ctx.lineJoin = 'round';
-      ctx.strokeText(gameName, innerRadius - textOffset, 0);
+      ctx.strokeText(label, innerRadius - textOffset, 0);
 
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(gameName, innerRadius - textOffset, 0);
+      ctx.fillText(label, innerRadius - textOffset, 0);
 
       ctx.restore();
       ctx.restore();
-    }
+    });
 
     ctx.restore();
-  }, [displayedGames, rotation, size, loadedImages]);
+  }, [sliceLayout, rotation, size, loadedImages]);
 
   useEffect(() => {
-    if (isSpinning && winningIndex !== null && winningIndex >= 0 && remainingGames.length > 0 && spinSeed) {
-      if (activeSpinSeedRef.current === spinSeed) {
-        return;
-      }
-      activeSpinSeedRef.current = spinSeed;
-
-      const numSlices = remainingGames.length;
-      const sliceDeg = 360 / numSlices;
-      const targetSliceCenter = winningIndex * sliceDeg + sliceDeg / 2;
-      const desiredPointerDeg = 270;
-      const targetDeg = (desiredPointerDeg - targetSliceCenter + 360) % 360;
-      
-      const extraSpins = 360 * 7;
-      const currentMod = rotation % 360;
-      const finalRotation = rotation + extraSpins + (targetDeg - currentMod + 360) % 360;
-      
-      const startTime = performance.now();
-      const duration = 5200;
-      const startRotation = rotation;
-
-      const animate = (currentTime) => {
-        const elapsed = currentTime - startTime;
-        if (elapsed < duration) {
-          const progress = elapsed / duration;
-          const easeOut = 1 - Math.pow(1 - progress, 4);
-          const currentRot = startRotation + (finalRotation - startRotation) * easeOut;
-          setRotation(currentRot);
-
-          const currentSlice = Math.floor((((270 - currentRot) % 360 + 360) % 360) / sliceDeg);
-          if (currentSlice !== prevSliceIndexRef.current) {
-            prevSliceIndexRef.current = currentSlice;
-            setIsTicking(true);
-            setTimeout(() => setIsTicking(false), 50);
-          }
-
-          animRef.current = requestAnimationFrame(animate);
-        } else {
-          setRotation(finalRotation);
-          if (onSpinEnd) {
-            onSpinEnd();
-          }
-          confetti({
-            particleCount: 90,
-            spread: 80,
-            origin: { y: 0.6 }
-          });
-        }
-      };
-
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      animRef.current = requestAnimationFrame(animate);
+    if (!isSpinning || winningIndex === null || winningIndex < 0 || displayedItems.length === 0 || !spinSeed) {
+      return undefined;
     }
-  }, [isSpinning, winningIndex, spinSeed]);
 
-  const displayWinner = fixGameName(activeGame);
+    const effectiveStart = spinStartedAt > 0 ? spinStartedAt : Date.now();
+    const effectiveTargetRot = targetRotation > startRotation
+      ? targetRotation
+      : computeTargetRotationForLayout({
+          startRotation,
+          winningIndex,
+          items: displayedItems
+        });
+
+    let cancelled = false;
+
+    const triggerCelebration = () => {
+      if (celebratedSeedRef.current === spinSeed) return;
+      celebratedSeedRef.current = spinSeed;
+      playVictoryFanfare(soundEnabledRef.current);
+      if (onSpinEnd) {
+        onSpinEnd();
+      }
+      if (size >= 360) {
+        confetti({
+          particleCount: 90,
+          spread: 80,
+          origin: { y: 0.6 }
+        });
+      }
+    };
+
+    const animate = () => {
+      if (cancelled) return;
+      const frame = interpolateSpinRotation({
+        startRotation,
+        targetRotation: effectiveTargetRot,
+        spinStartedAt: effectiveStart,
+        spinDurationMs,
+        now: Date.now()
+      });
+
+      setRotation(frame.rotation);
+
+      const currentSlice = getSliceIndexAtPointerForLayout(frame.rotation, displayedItems);
+      if (currentSlice !== prevSliceIndexRef.current && !frame.done) {
+        prevSliceIndexRef.current = currentSlice;
+        setIsTicking(true);
+        playTickSound(soundEnabledRef.current);
+        if (tickTimerRef.current) clearTimeout(tickTimerRef.current);
+        tickTimerRef.current = setTimeout(() => {
+          setIsTicking(false);
+          tickTimerRef.current = null;
+        }, 55);
+      }
+
+      if (!frame.done) {
+        animRef.current = requestAnimationFrame(animate);
+      } else {
+        animRef.current = null;
+        setIsTicking(false);
+        triggerCelebration();
+      }
+    };
+
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelled = true;
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      if (tickTimerRef.current) {
+        clearTimeout(tickTimerRef.current);
+        tickTimerRef.current = null;
+      }
+    };
+  }, [isSpinning, winningIndex, spinSeed, spinStartedAt, spinDurationMs, startRotation, targetRotation, displayedItems, size]);
+
+  const winnerLabel = typeof activeItem === 'string' ? activeItem : activeItem?.label || '';
+  const hubSize = Math.round(size * 0.17);
+  const avatarSize = Math.round(hubSize * 0.78);
+  const teamA = teams[0] || { name: 'TEAM A', color: '#0d9f67', textColor: '#ffffff', logoUrl: '' };
+  const teamB = teams[1] || { name: 'TEAM B', color: '#d99b26', textColor: '#091210', logoUrl: '' };
 
   return (
     <div className="roulette-wrapper">
       <div className={`wheel-pointer ${isTicking ? 'wheel-pointer-tick' : ''}`} />
-      
+
       <canvas
         ref={canvasRef}
         width={size}
@@ -286,27 +349,35 @@ export default function RouletteWheel({
         style={{ width: `${size}px`, height: `${size}px` }}
       />
 
-      <div className="roulette-center-hub">
-        <img
-          src="/LOGO FDN.png"
-          alt="FDN Logo"
-          className={`hub-logo-img ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
-        />
-        <img
-          src="/LOGO LAUTASHE.jpeg"
-          alt="Lautashe Logo"
-          className={`hub-logo-img ${activeLogoIndex === 1 ? 'hub-logo-active' : 'hub-logo-hidden'}`}
-        />
+      <div className="roulette-center-hub" style={{ width: hubSize, height: hubSize }}>
+        <div className={`hub-logo-slot ${activeLogoIndex === 0 ? 'hub-logo-active' : 'hub-logo-hidden'}`}>
+          <TeamAvatar
+            name={teamA.name}
+            logoUrl={teamA.logoUrl}
+            color={teamA.color}
+            textColor={teamA.textColor}
+            size={avatarSize}
+          />
+        </div>
+        <div className={`hub-logo-slot ${activeLogoIndex === 1 ? 'hub-logo-active' : 'hub-logo-hidden'}`}>
+          <TeamAvatar
+            name={teamB.name}
+            logoUrl={teamB.logoUrl}
+            color={teamB.color}
+            textColor={teamB.textColor}
+            size={avatarSize}
+          />
+        </div>
       </div>
 
-      {showWinnerModal && displayWinner && (
+      {showWinnerModal && winnerLabel && (
         <div className="winner-overlay-modal animate-pop">
           <div className="winner-card">
-            <h1 style={{ fontSize: 32, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
-              {displayWinner}
+            <h1 style={{ fontSize: Math.max(20, Math.round(size * 0.062)), fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, color: '#ffffff' }}>
+              {winnerLabel}
             </h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 0, fontWeight: 700 }}>
-              FDN VS LAUCHANG
+              {title}
             </p>
           </div>
         </div>

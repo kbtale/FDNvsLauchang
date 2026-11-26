@@ -1,5 +1,7 @@
 import { DEFAULT_ROOM_ID } from './auth.js';
 
+export const CUSTOM_ROOM_TTL_SECONDS = 30 * 24 * 60 * 60;
+
 const memoryStore = new Map();
 
 export function getRedisConfig() {
@@ -15,6 +17,21 @@ export function isRedisConfigured() {
 
 export function getPersistenceMode() {
   return isRedisConfigured() ? 'redis' : 'memory';
+}
+
+function readMemoryEntry(key) {
+  const entry = memoryStore.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt && Date.now() >= entry.expiresAt) {
+    memoryStore.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function writeMemoryEntry(key, value, ttlSeconds = 0) {
+  const expiresAt = ttlSeconds > 0 ? Date.now() + ttlSeconds * 1000 : 0;
+  memoryStore.set(key, { value, expiresAt });
 }
 
 export async function getStoreValue(key) {
@@ -35,7 +52,7 @@ export async function getStoreValue(key) {
           }
         }
         if (parsed && typeof parsed === 'object') {
-          memoryStore.set(key, parsed);
+          writeMemoryEntry(key, parsed);
           return parsed;
         }
       }
@@ -43,14 +60,18 @@ export async function getStoreValue(key) {
       console.error('Redis GET error:', e);
     }
   }
-  return memoryStore.get(key) || null;
+  return readMemoryEntry(key);
 }
 
-export async function setStoreValue(key, value) {
+export async function setStoreValue(key, value, options = {}) {
+  const ttlSeconds = typeof options.ttlSeconds === 'number' && options.ttlSeconds > 0
+    ? Math.floor(options.ttlSeconds)
+    : 0;
   const { url, token } = getRedisConfig();
   if (url && token) {
     try {
-      await fetch(`${url}/set/${encodeURIComponent(key)}`, {
+      const query = ttlSeconds > 0 ? `?EX=${ttlSeconds}` : '';
+      await fetch(`${url}/set/${encodeURIComponent(key)}${query}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -62,7 +83,7 @@ export async function setStoreValue(key, value) {
       console.error('Redis SET error:', e);
     }
   }
-  memoryStore.set(key, value);
+  writeMemoryEntry(key, value, ttlSeconds);
 }
 
 export function getRoomMetaKey(roomId) {
@@ -78,7 +99,8 @@ export async function getRoomMeta(roomId) {
 }
 
 export async function setRoomMeta(roomId, meta) {
-  return setStoreValue(getRoomMetaKey(roomId), meta);
+  const ttlSeconds = roomId === DEFAULT_ROOM_ID ? 0 : CUSTOM_ROOM_TTL_SECONDS;
+  return setStoreValue(getRoomMetaKey(roomId), meta, { ttlSeconds });
 }
 
 export async function getRoomState(roomId) {
@@ -93,7 +115,8 @@ export async function getRoomState(roomId) {
 }
 
 export async function setRoomState(roomId, state) {
-  await setStoreValue(getRoomStateKey(roomId), state);
+  const ttlSeconds = roomId === DEFAULT_ROOM_ID ? 0 : CUSTOM_ROOM_TTL_SECONDS;
+  await setStoreValue(getRoomStateKey(roomId), state, { ttlSeconds });
 }
 
 export function clearMemoryStore() {

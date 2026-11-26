@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import roomsHandler from '../api/rooms.js';
 import authHandler from '../api/auth.js';
 import syncHandler from '../api/sync.js';
-import { resetRateLimiter } from '../api/_lib/auth.js';
+import { resetRateLimiter, resetRoomCreateRateLimit } from '../api/_lib/auth.js';
 import { clearMemoryStore } from '../api/_lib/store.js';
 
 function createMockRes() {
@@ -39,6 +39,7 @@ describe('Multi-Room API & Strict Room Isolation', () => {
 
   beforeEach(() => {
     resetRateLimiter();
+    resetRoomCreateRateLimit();
     clearMemoryStore();
     process.env.ADMIN_PASSWORD = 'global-default-admin-pw';
     process.env.SESSION_SECRET = 'multi-room-test-secret-32-bytes-long';

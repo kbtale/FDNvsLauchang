@@ -18,6 +18,7 @@ import { Tabs, TabsIndicator, TabsList, TabsPanel, TabsTab } from '@ui-sdk/react
 import { toast } from '@ui-sdk/react/toast';
 import TeamAvatar from '../components/TeamAvatar';
 import {
+  CLASSIC_PRESETS,
   DEFAULT_ROOM_ID,
   ROOM_PRESETS,
   getRoomUrls,
@@ -35,7 +36,7 @@ function generateRandomPin() {
 
 export default function Hub() {
   const { lang, setLang, t } = useI18n();
-  const defaultPreset = ROOM_PRESETS[1];
+  const defaultPreset = ROOM_PRESETS[0];
   const [selectedPresetId, setSelectedPresetId] = useState(defaultPreset.id);
   const [title, setTitle] = useState(defaultPreset.title);
   const [customRoomId, setCustomRoomId] = useState('');
@@ -557,7 +558,7 @@ export default function Hub() {
             <div className="card-panel" style={{ maxWidth: 640 }}>
               <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 8 }}>Open an Existing Room</h2>
               <p style={{ fontSize: 13.5, color: 'var(--text-muted)', marginBottom: 18 }}>
-                Enter any room code (such as <code>fdn-vs-lauchang</code> or your custom slug) to open its control panel or OBS browser sources.
+                Enter any room code (such as your custom event slug) to open its control panel or OBS browser sources.
               </p>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <input
@@ -581,6 +582,51 @@ export default function Hub() {
             </div>
           </TabsPanel>
         </Tabs>
+
+        {CLASSIC_PRESETS.length > 0 && (
+          <section style={{ marginTop: 32 }}>
+            <div className="card-panel" style={{ padding: 18, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <TeamAvatar
+                    name={CLASSIC_PRESETS[0].teams[0].name}
+                    logoUrl={CLASSIC_PRESETS[0].teams[0].logoUrl}
+                    color={CLASSIC_PRESETS[0].teams[0].color}
+                    size={32}
+                  />
+                  <TeamAvatar
+                    name={CLASSIC_PRESETS[0].teams[1].name}
+                    logoUrl={CLASSIC_PRESETS[0].teams[1].logoUrl}
+                    color={CLASSIC_PRESETS[0].teams[1].color}
+                    size={32}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Classic Event Shortcut
+                  </div>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>
+                    {CLASSIC_PRESETS[0].name}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button type="button" className="btn-secondary" style={{ padding: '8px 14px', fontSize: 13 }} onClick={() => applyPreset(CLASSIC_PRESETS[0])}>
+                  Load as Template
+                </button>
+                <button type="button" className="btn-white" style={{ padding: '8px 14px', fontSize: 13 }} onClick={() => navigateTo('/control')}>
+                  <Sliders size={14} /> {t('openClassic')}
+                </button>
+                <a href="/roulette" target="_blank" rel="noreferrer" className="btn-secondary" style={{ padding: '8px 12px', fontSize: 13 }}>
+                  <Dices size={14} />
+                </a>
+                <a href="/scoreboard" target="_blank" rel="noreferrer" className="btn-secondary" style={{ padding: '8px 12px', fontSize: 13 }}>
+                  <Trophy size={14} />
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

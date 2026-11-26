@@ -1,10 +1,13 @@
 import crypto from 'node:crypto';
 import {
   applyCors,
+  checkRoomCreateRateLimit,
   DEFAULT_ROOM_ID,
+  getClientIp,
   getSessionSecret,
   hashPassword,
   normalizeRoomId,
+  recordRoomCreate,
   signRoomToken
 } from './_lib/auth.js';
 import {
@@ -48,6 +51,13 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'Server authentication not configured' });
   }
 
+  const clientIp = getClientIp(req);
+  const rateLimit = checkRoomCreateRateLimit(clientIp);
+  if (rateLimit.limited) {
+    res.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+    return res.status(429).json({ error: 'Too many rooms created from this IP, try again later' });
+  }
+
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const password = typeof body.password === 'string' ? body.password.trim() : '';
   if (password.length < 4 || password.length > 128) {
@@ -80,7 +90,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const presetId = typeof body.presetId === 'string' ? body.presetId : 'bo5-showmatch';
+  const presetId = typeof body.presetId === 'string' ? body.presetId : 'versus-match';
   const initialState = createPresetRoomState(presetId, {
     roomId,
     title,
@@ -99,9 +109,11 @@ export default async function handler(req, res) {
   await setRoomMeta(roomId, {
     roomId,
     passwordHash,
+    tokenVersion: 1,
     createdAt: Date.now()
   });
   await setRoomState(roomId, initialState);
+  recordRoomCreate(clientIp);
 
   const signed = signRoomToken(roomId);
   return res.status(201).json({

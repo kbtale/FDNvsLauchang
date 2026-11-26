@@ -74,10 +74,154 @@ export function getTeamMonogram(name) {
 
 export const ROOM_PRESETS = [
   {
+    id: 'versus-match',
+    name: '1v1 Versus Match',
+    badge: 'Head-to-Head',
+    description: 'Sports, esports, debates, or trivia duels with Best-of-N series tracking.',
+    title: 'LIVE SHOWMATCH',
+    bestOf: 5,
+    teams: [
+      {
+        id: 'a',
+        name: 'TEAM ALPHA',
+        subtitle: 'HOME SIDE',
+        color: '#2563eb',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      },
+      {
+        id: 'b',
+        name: 'TEAM OMEGA',
+        subtitle: 'AWAY SIDE',
+        color: '#e11d48',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      }
+    ],
+    items: [
+      { id: '1', label: 'ROUND 1 · SPEED', color: '#2563eb', imageUrl: '', weight: 1 },
+      { id: '2', label: 'ROUND 2 · SKILL', color: '#0d9f67', imageUrl: '', weight: 1 },
+      { id: '3', label: 'ROUND 3 · STRATEGY', color: '#d99b26', imageUrl: '', weight: 1 },
+      { id: '4', label: 'ROUND 4 · WILDCARD', color: '#7c3aed', imageUrl: '', weight: 1 },
+      { id: '5', label: 'TIEBREAKER', color: '#e11d48', imageUrl: '', weight: 1 }
+    ]
+  },
+  {
+    id: 'raffle-wheel',
+    name: 'Giveaway & Raffle',
+    badge: 'Picker',
+    description: 'Prize draws, viewer raffles, sponsor giveaways, and weighted random picks.',
+    title: 'LIVE GIVEAWAY',
+    bestOf: 0,
+    teams: [
+      {
+        id: 'a',
+        name: 'HOST',
+        subtitle: 'STAGE',
+        color: '#0d9f67',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      },
+      {
+        id: 'b',
+        name: 'AUDIENCE',
+        subtitle: 'WINNERS',
+        color: '#d99b26',
+        textColor: '#091210',
+        logoUrl: '',
+        score: 0
+      }
+    ],
+    items: [
+      { id: '1', label: 'GRAND PRIZE', color: '#d99b26', imageUrl: '', weight: 1 },
+      { id: '2', label: 'GIFT CARD', color: '#0d9f67', imageUrl: '', weight: 2 },
+      { id: '3', label: 'MERCH PACK', color: '#2563eb', imageUrl: '', weight: 2 },
+      { id: '4', label: 'VIP SHOUTOUT', color: '#7c3aed', imageUrl: '', weight: 3 },
+      { id: '5', label: 'MYSTERY BOX', color: '#e11d48', imageUrl: '', weight: 1 },
+      { id: '6', label: 'BONUS SPIN', color: '#0891b2', imageUrl: '', weight: 2 }
+    ]
+  },
+  {
+    id: 'party-leaderboard',
+    name: 'Trivia & Party Night',
+    badge: 'Event Night',
+    description: 'Interactive trivia categories, quiz rounds, and group party events.',
+    title: 'TRIVIA & PARTY NIGHT',
+    bestOf: 7,
+    teams: [
+      {
+        id: 'a',
+        name: 'TEAM SOLAR',
+        subtitle: 'GOLD SQUAD',
+        color: '#eab308',
+        textColor: '#091210',
+        logoUrl: '',
+        score: 0
+      },
+      {
+        id: 'b',
+        name: 'TEAM NOVA',
+        subtitle: 'CYAN SQUAD',
+        color: '#06b6d4',
+        textColor: '#091210',
+        logoUrl: '',
+        score: 0
+      }
+    ],
+    items: [
+      { id: '1', label: 'POP CULTURE', color: '#7c3aed', imageUrl: '', weight: 1 },
+      { id: '2', label: 'MUSIC & FILM', color: '#e11d48', imageUrl: '', weight: 1 },
+      { id: '3', label: 'SCIENCE & TECH', color: '#2563eb', imageUrl: '', weight: 1 },
+      { id: '4', label: 'SPORTS', color: '#0d9f67', imageUrl: '', weight: 1 },
+      { id: '5', label: 'LIGHTNING ROUND', color: '#d99b26', imageUrl: '', weight: 1 }
+    ]
+  },
+  {
+    id: 'workshop-wheel',
+    name: 'Variety & Challenges',
+    badge: 'Creator',
+    description: 'Stream challenges, live Q&A topics, karaoke picks, or classroom prompts.',
+    title: 'LIVE CHALLENGE WHEEL',
+    bestOf: 0,
+    teams: [
+      {
+        id: 'a',
+        name: 'CREATOR',
+        subtitle: 'LIVE HOST',
+        color: '#7c3aed',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      },
+      {
+        id: 'b',
+        name: 'COMMUNITY',
+        subtitle: 'CHAT PICKS',
+        color: '#0d9f67',
+        textColor: '#ffffff',
+        logoUrl: '',
+        score: 0
+      }
+    ],
+    items: [
+      { id: '1', label: 'AUDIENCE PICK', color: '#7c3aed', imageUrl: '', weight: 2 },
+      { id: '2', label: 'SPEED CHALLENGE', color: '#d99b26', imageUrl: '', weight: 2 },
+      { id: '3', label: 'Q&A HOT SEAT', color: '#2563eb', imageUrl: '', weight: 1 },
+      { id: '4', label: 'HARD MODE', color: '#c93232', imageUrl: '', weight: 1 },
+      { id: '5', label: 'CO-OP ROUND', color: '#0d9f67', imageUrl: '', weight: 2 }
+    ]
+  }
+];
+
+export const CLASSIC_PRESETS = [
+  {
     id: 'fdn-vs-lauchang',
     name: 'FDN vs Lauchang',
     badge: 'Classic Event',
-    description: 'The original 5-game broadcast showdown with FDN and Lauchang branding.',
+    description: 'The original 5-game broadcast showdown with classic FDN and Lauchang routes.',
     title: 'FDN VS LAUCHANG',
     bestOf: 5,
     teams: [
@@ -107,114 +251,10 @@ export const ROOM_PRESETS = [
       { id: '4', label: 'COUNTER-STRIKE 2', color: '#1f352e', imageUrl: '/games/counterstrikebanner.jpg', weight: 1 },
       { id: '5', label: 'FALL GUYS', color: '#0d9f67', imageUrl: '/games/fallguysbanner.jpg', weight: 1 }
     ]
-  },
-  {
-    id: 'bo5-showmatch',
-    name: '1v1 Bo5 Showmatch',
-    badge: 'Esports',
-    description: 'Competitive map/game decider wheel with Best-of-5 series pips.',
-    title: 'BO5 SHOWMATCH',
-    bestOf: 5,
-    teams: [
-      {
-        id: 'a',
-        name: 'TEAM ALPHA',
-        subtitle: 'CHALLENGER',
-        color: '#2563eb',
-        textColor: '#ffffff',
-        logoUrl: '',
-        score: 0
-      },
-      {
-        id: 'b',
-        name: 'TEAM OMEGA',
-        subtitle: 'DEFENDER',
-        color: '#e11d48',
-        textColor: '#ffffff',
-        logoUrl: '',
-        score: 0
-      }
-    ],
-    items: [
-      { id: '1', label: 'VALORANT', color: '#e11d48', imageUrl: '', weight: 1 },
-      { id: '2', label: 'COUNTER-STRIKE 2', color: '#1f352e', imageUrl: '/games/counterstrikebanner.jpg', weight: 1 },
-      { id: '3', label: 'ROCKET LEAGUE', color: '#2563eb', imageUrl: '', weight: 1 },
-      { id: '4', label: 'APEX LEGENDS', color: '#d97706', imageUrl: '', weight: 1 },
-      { id: '5', label: 'OVERWATCH 2', color: '#0d9f67', imageUrl: '', weight: 1 }
-    ]
-  },
-  {
-    id: 'variety-wheel',
-    name: 'Variety Stream Wheel',
-    badge: 'Creator',
-    description: 'Spin for stream challenges, viewer picks, or random game switches.',
-    title: 'VARIETY WHEEL',
-    bestOf: 0,
-    teams: [
-      {
-        id: 'a',
-        name: 'STREAMER',
-        subtitle: 'HOST',
-        color: '#7c3aed',
-        textColor: '#ffffff',
-        logoUrl: '',
-        score: 0
-      },
-      {
-        id: 'b',
-        name: 'CHAT',
-        subtitle: 'COMMUNITY',
-        color: '#0d9f67',
-        textColor: '#ffffff',
-        logoUrl: '',
-        score: 0
-      }
-    ],
-    items: [
-      { id: '1', label: 'MINECRAFT', color: '#16a34a', imageUrl: '', weight: 2 },
-      { id: '2', label: 'MARIO KART', color: '#dc2626', imageUrl: '', weight: 2 },
-      { id: '3', label: 'CHAT PICKS', color: '#7c3aed', imageUrl: '', weight: 1 },
-      { id: '4', label: 'SPEEDRUN', color: '#d99b26', imageUrl: '', weight: 1 },
-      { id: '5', label: 'HORROR GAME', color: '#1f2937', imageUrl: '', weight: 1 },
-      { id: '6', label: 'FALL GUYS', color: '#0891b2', imageUrl: '/games/fallguysbanner.jpg', weight: 2 }
-    ]
-  },
-  {
-    id: 'party-night',
-    name: 'Party Night',
-    badge: 'Squad',
-    description: 'Fast multiplayer party games for group streams and community nights.',
-    title: 'PARTY NIGHT',
-    bestOf: 7,
-    teams: [
-      {
-        id: 'a',
-        name: 'SQUAD SUN',
-        subtitle: 'GOLD SIDE',
-        color: '#eab308',
-        textColor: '#091210',
-        logoUrl: '',
-        score: 0
-      },
-      {
-        id: 'b',
-        name: 'SQUAD NOVA',
-        subtitle: 'CYAN SIDE',
-        color: '#06b6d4',
-        textColor: '#091210',
-        logoUrl: '',
-        score: 0
-      }
-    ],
-    items: [
-      { id: '1', label: 'AMONG US', color: '#dc2626', imageUrl: '', weight: 1 },
-      { id: '2', label: 'GARTHIC PHONE', color: '#7c3aed', imageUrl: '', weight: 1 },
-      { id: '3', label: 'FALL GUYS', color: '#0d9f67', imageUrl: '/games/fallguysbanner.jpg', weight: 1 },
-      { id: '4', label: 'PICO PARK', color: '#d99b26', imageUrl: '', weight: 1 },
-      { id: '5', label: 'JACKBOX', color: '#2563eb', imageUrl: '', weight: 1 }
-    ]
   }
 ];
+
+export const ALL_PRESETS = [...ROOM_PRESETS, ...CLASSIC_PRESETS];
 
 export function normalizeItem(raw, index = 0) {
   if (typeof raw === 'string') {
@@ -265,8 +305,8 @@ export function normalizeTeam(raw, fallback) {
   };
 }
 
-export function createPresetRoomState(presetId = DEFAULT_ROOM_ID, overrides = {}) {
-  const preset = ROOM_PRESETS.find((p) => p.id === presetId) || ROOM_PRESETS[0];
+export function createPresetRoomState(presetId = 'versus-match', overrides = {}) {
+  const preset = ALL_PRESETS.find((p) => p.id === presetId) || ROOM_PRESETS[0];
   const roomId = overrides.roomId || preset.id;
   const teamsInput = Array.isArray(overrides.teams) && overrides.teams.length === 2
     ? overrides.teams
@@ -320,7 +360,7 @@ export function createPresetRoomState(presetId = DEFAULT_ROOM_ID, overrides = {}
 
 export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
   const base = createPresetRoomState(
-    roomId === DEFAULT_ROOM_ID ? DEFAULT_ROOM_ID : 'bo5-showmatch',
+    roomId === DEFAULT_ROOM_ID ? DEFAULT_ROOM_ID : 'versus-match',
     { roomId, updatedAt: 0 }
   );
 

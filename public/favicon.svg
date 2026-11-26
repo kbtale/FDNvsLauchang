@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
   <circle cx="60" cy="60" r="56" fill="#0A0F0D" stroke="#D99B26" stroke-width="6"/>
-  <circle cx="60" cy="60" r="48" fill="#121917" stroke="#0D9F67" stroke-width="3"/>
-  <text x="60" y="74" text-anchor="middle" fill="#D99B26" font-size="42" font-weight="900" font-family="sans-serif" letter-spacing="1">VS</text>
+  <path d="M60 12 A48 48 0 0 1 108 60 L60 60 Z" fill="#0D9F67"/>
+  <path d="M108 60 A48 48 0 0 1 60 108 L60 60 Z" fill="#D99B26"/>
+  <path d="M60 108 A48 48 0 0 1 12 60 L60 60 Z" fill="#2563EB"/>
+  <path d="M12 60 A48 48 0 0 1 60 12 L60 60 Z" fill="#C93232"/>
+  <circle cx="60" cy="60" r="22" fill="#0A0F0D" stroke="#D99B26" stroke-width="4"/>
+  <polygon points="60,2 50,18 70,18" fill="#FFFFFF"/>
+  <text x="60" y="66" text-anchor="middle" fill="#FFFFFF" font-size="18" font-weight="900" font-family="sans-serif">AO</text>
 </svg>

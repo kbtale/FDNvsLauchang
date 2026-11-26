@@ -3,6 +3,7 @@ import {
   sanitizeMediaUrl,
   sanitizeHexColor,
   normalizeRoomState,
+  CLASSIC_PRESETS,
   ROOM_PRESETS
 } from '../src/lib/roomSchema.js';
 import {
@@ -48,7 +49,8 @@ describe('URL Sanitization & Room Schema', () => {
     expect(upgraded.items.map((i) => i.label)).toEqual(['FORTNITE', 'FALL GUYS']);
     expect(upgraded.drawnItems.map((i) => i.label)).toEqual(['CLASH ROYALE']);
     expect(upgraded.activeItem.label).toBe('CLASH ROYALE');
-    expect(ROOM_PRESETS.some((p) => p.id === 'fdn-vs-lauchang')).toBe(true);
+    expect(CLASSIC_PRESETS.some((p) => p.id === 'fdn-vs-lauchang')).toBe(true);
+    expect(ROOM_PRESETS.length).toBeGreaterThanOrEqual(4);
   });
 
   it('computes accurate weighted slice landing geometry', () => {

@@ -14,9 +14,12 @@ import { toast } from '@ui-sdk/react/toast';
 import { SyncEngine, getInitialState } from '../lib/sync';
 import {
   DEFAULT_ROOM_ID,
+  MAX_LEADERBOARD_TEAMS,
+  MAX_SEGMENTS,
   createPresetRoomState,
   getRoomUrls,
   getTokenStorageKey,
+  parseBulkSegments,
   pickContrastingTextColor,
   sanitizeMediaUrl
 } from '../lib/roomSchema';
@@ -86,6 +89,8 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
   const [newGameColor, setNewGameColor] = useState('#0d9f67');
   const [newGameWeight, setNewGameWeight] = useState(1);
   const [newGameImageUrl, setNewGameImageUrl] = useState('');
+  const [showBulkPaste, setShowBulkPaste] = useState(false);
+  const [bulkText, setBulkText] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
@@ -271,16 +276,22 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
     if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
     spinTimerRef.current = setTimeout(() => {
       const latest = stateRef.current;
-      const remaining = (latest.items || []).filter((item) => item.id !== selectedItem.id);
+      const keepOnWheel = latest.drawMode === 'keep';
+      const remaining = keepOnWheel
+        ? latest.items
+        : (latest.items || []).filter((item) => item.id !== selectedItem.id);
       const alreadyDrawn = (latest.drawnItems || []).some((item) => item.id === selectedItem.id);
-      const drawn = alreadyDrawn
+      const drawn = keepOnWheel || alreadyDrawn
         ? latest.drawnItems
         : [...(latest.drawnItems || []), selectedItem];
+      const scoreSummary = latest.mode === 'wheel-only'
+        ? latest.title
+        : latest.teams.slice(0, 2).map((tm) => `${tm.name} ${tm.score}`).join(' - ');
       const historyEntry = {
         id: `spin-${spinStartedAt}`,
         type: 'spin',
         label: selectedItem.label,
-        detail: `${latest.teams[0].name} ${latest.teams[0].score} - ${latest.teams[1].score} ${latest.teams[1].name}`,
+        detail: scoreSummary,
         timestamp: Date.now()
       };
 
@@ -411,6 +422,56 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
     toast.success(t('segmentAdded'), { description: label });
   };
 
+  const handleBulkImport = (replaceExisting) => {
+    if (!syncEngine || state.spin?.isSpinning) return;
+    const latest = stateRef.current;
+    const parsed = parseBulkSegments(bulkText, replaceExisting ? 0 : latest.items.length);
+    if (parsed.length === 0) return;
+    pushUndoSnapshot(latest);
+    const nextItems = (replaceExisting ? parsed : [...latest.items, ...parsed]).slice(0, MAX_SEGMENTS);
+    syncEngine.broadcast({
+      ...latest,
+      items: nextItems,
+      drawnItems: replaceExisting ? [] : latest.drawnItems
+    });
+    setBulkText('');
+    setShowBulkPaste(false);
+    toast.success(`Imported ${parsed.length} segments`);
+  };
+
+  const addLeaderboardTeam = () => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    if (latest.teams.length >= MAX_LEADERBOARD_TEAMS) return;
+    const idx = latest.teams.length;
+    const color = SLICE_COLORS[idx % SLICE_COLORS.length].toLowerCase();
+    syncEngine.broadcast({
+      ...latest,
+      teams: [
+        ...latest.teams,
+        {
+          id: `p-${Date.now()}-${idx}`,
+          name: `PLAYER ${idx + 1}`,
+          subtitle: '',
+          color,
+          textColor: pickContrastingTextColor(color),
+          logoUrl: '',
+          score: 0
+        }
+      ]
+    });
+  };
+
+  const removeLeaderboardTeam = (idx) => {
+    if (!syncEngine) return;
+    const latest = stateRef.current;
+    if (latest.teams.length <= 2) return;
+    syncEngine.broadcast({
+      ...latest,
+      teams: latest.teams.filter((_, i) => i !== idx)
+    });
+  };
+
   const updateRoomSetting = (patch) => {
     if (!syncEngine) return;
     syncEngine.broadcast({
@@ -532,11 +593,11 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
   }
 
   const isSpinning = Boolean(state.spin?.isSpinning);
-  const teamA = state.teams[0];
-  const teamB = state.teams[1];
   const winsNeeded = state.bestOf > 0 ? Math.ceil(state.bestOf / 2) : 0;
   const fullRouletteUrl = `${window.location.origin}${roomUrls.roulette}`;
   const fullScoreboardUrl = `${window.location.origin}${roomUrls.scoreboard}`;
+  const fullStageUrl = `${window.location.origin}${roomUrls.stage}`;
+  const visibleTeams = state.mode === 'versus' ? state.teams.slice(0, 2) : state.teams;
 
   return (
     <div className="admin-page-bg" style={{ padding: '24px 16px 56px', position: 'relative' }}>
@@ -621,65 +682,90 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
           </TabsList>
 
           <TabsPanel value="live">
-            <div className="responsive-grid-2" style={{ marginBottom: 24 }}>
-              {[teamA, teamB].map((team, idx) => (
-                <div key={team.id} className="card-panel" style={{ borderTop: `3px solid ${team.color}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <TeamAvatar
-                        name={team.name}
-                        logoUrl={team.logoUrl}
-                        color={team.color}
-                        textColor={team.textColor}
-                        size={54}
-                      />
-                      <div>
-                        <h2 style={{ fontSize: 20, fontWeight: 800 }}>{team.name}</h2>
-                        <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                          {team.subtitle || (idx === 0 ? 'TEAM A' : 'TEAM B')}
-                          {winsNeeded > 0 ? ` · ${t('firstTo')} ${winsNeeded}` : ''}
-                        </p>
+            {state.mode !== 'wheel-only' && (
+              <div className="responsive-grid-2" style={{ marginBottom: 24 }}>
+                {visibleTeams.map((team, idx) => (
+                  <div key={team.id} className="card-panel" style={{ borderTop: `3px solid ${team.color}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <TeamAvatar
+                          name={team.name}
+                          logoUrl={team.logoUrl}
+                          color={team.color}
+                          textColor={team.textColor}
+                          size={54}
+                        />
+                        <div>
+                          <h2 style={{ fontSize: 20, fontWeight: 800 }}>{team.name}</h2>
+                          <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                            {team.subtitle || `SIDE ${idx + 1}`}
+                            {state.mode === 'versus' && winsNeeded > 0 ? ` · ${t('firstTo')} ${winsNeeded}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
+                        {team.score}
                       </div>
                     </div>
-                    <div style={{ fontSize: 44, fontWeight: 900, color: 'var(--accent-gold)' }}>
-                      {team.score}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ flex: 1, opacity: isSpinning ? 0.5 : 1 }}
+                        disabled={isSpinning}
+                        onClick={() => updateScore(idx, 1)}
+                      >
+                        <Plus size={18} color="var(--accent-gold)" /> {t('scorePlusOne')}
+                        {idx < 2 && <kbd className="kbd-chip">{idx + 1}</kbd>}
+                      </button>
+                      {state.mode === 'leaderboard' && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ opacity: isSpinning ? 0.5 : 1, padding: '10px 14px' }}
+                          disabled={isSpinning}
+                          onClick={() => updateScore(idx, 5)}
+                        >
+                          +5
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ opacity: isSpinning ? 0.5 : 1 }}
+                        disabled={isSpinning}
+                        aria-label={`Decrease ${team.name} score`}
+                        onClick={() => updateScore(idx, -1)}
+                      >
+                        <Minus size={18} />
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      style={{ flex: 1, opacity: isSpinning ? 0.5 : 1 }}
-                      disabled={isSpinning}
-                      onClick={() => updateScore(idx, 1)}
-                    >
-                      <Plus size={18} color="var(--accent-gold)" /> {t('scorePlusOne')}
-                      <kbd className="kbd-chip">{idx + 1}</kbd>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      style={{ opacity: isSpinning ? 0.5 : 1 }}
-                      disabled={isSpinning}
-                      aria-label={`Decrease ${team.name} score`}
-                      onClick={() => updateScore(idx, -1)}
-                    >
-                      <Minus size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             <div className="responsive-grid-main">
               <div className="card-panel">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
                   <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Dices size={22} color="var(--accent-gold)" /> {t('rouletteActions')}
                   </h2>
-                  <span className="pill-badge badge-dark">
-                    {t('remaining')}: {state.items.length}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <label className="studio-switch-label" style={{ padding: '5px 10px', fontSize: 12 }}>
+                      <span>Keep on Wheel</span>
+                      <Switch
+                        className="studio-switch"
+                        checked={state.drawMode === 'keep'}
+                        onCheckedChange={(checked) => updateRoomSetting({ drawMode: checked ? 'keep' : 'eliminate' })}
+                      >
+                        <SwitchThumb className="studio-switch-thumb" />
+                      </Switch>
+                    </label>
+                    <span className="pill-badge badge-dark">
+                      {t('remaining')}: {state.items.length}
+                    </span>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
@@ -726,9 +812,40 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
               </div>
 
               <div className="card-panel">
-                <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Trophy size={22} color="var(--accent-gold)" /> {t('wheelSegments')}
-                </h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Trophy size={22} color="var(--accent-gold)" /> {t('wheelSegments')}
+                  </h2>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: '7px 12px', fontSize: 12.5 }}
+                    disabled={isSpinning}
+                    onClick={() => setShowBulkPaste((v) => !v)}
+                  >
+                    Bulk Paste
+                  </button>
+                </div>
+
+                {showBulkPaste && (
+                  <div className="bulk-paste-box" style={{ marginBottom: 16 }}>
+                    <textarea
+                      className="studio-input"
+                      rows={4}
+                      placeholder="Paste one item per line (or comma-separated)..."
+                      value={bulkText}
+                      onChange={(e) => setBulkText(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button type="button" className="btn-white" style={{ padding: '7px 12px', fontSize: 12.5 }} onClick={() => handleBulkImport(true)}>
+                        Replace Wheel
+                      </button>
+                      <button type="button" className="btn-secondary" style={{ padding: '7px 12px', fontSize: 12.5 }} onClick={() => handleBulkImport(false)}>
+                        Append
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <form onSubmit={handleAddCustomSegment} style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -904,6 +1021,29 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
               </div>
             </div>
 
+            <div className="card-panel" style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MonitorPlay size={18} color="var(--accent-gold)" /> Live Stage / Projector View
+                  </h3>
+                  <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Full-screen combined wheel + scoreboard display for live venues, LAN screens, and watch parties.
+                  </p>
+                </div>
+                <span className="pill-badge badge-dark">1920 × 1080 Full Screen</span>
+              </div>
+              <div className="obs-url-box">{fullStageUrl}</div>
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                <button type="button" className="btn-white" onClick={() => copyObsUrl(roomUrls.stage, 'Stage View')}>
+                  <Copy size={15} /> {t('copyUrl')}
+                </button>
+                <a href={roomUrls.stage} target="_blank" rel="noreferrer" className="btn-secondary">
+                  Open Stage Screen <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
             <div className="card-panel">
               <h3 style={{ fontSize: 18, fontWeight: 900, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <MonitorPlay size={18} color="var(--accent-gold)" /> {t('liveMiniPreview')}
@@ -962,7 +1102,7 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                 <Settings size={20} color="var(--accent-gold)" /> {t('tabSettings')}
               </h2>
 
-              <div className="responsive-grid-2" style={{ marginBottom: 18 }}>
+              <div className="studio-form-row" style={{ marginBottom: 18 }}>
                 <label className="studio-field">
                   <span>{t('eventTitle')}</span>
                   <input
@@ -974,27 +1114,69 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                   />
                 </label>
                 <label className="studio-field">
-                  <span>{t('matchFormat')}</span>
+                  <span>Event Mode</span>
                   <select
                     className="studio-input"
-                    value={state.bestOf}
-                    onChange={(e) => updateRoomSetting({ bestOf: Number(e.target.value) })}
+                    value={state.mode || 'versus'}
+                    onChange={(e) => updateRoomSetting({ mode: e.target.value })}
                   >
-                    <option value={0}>{t('freeplay')}</option>
-                    <option value={3}>Best of 3</option>
-                    <option value={5}>Best of 5</option>
-                    <option value={7}>Best of 7</option>
-                    <option value={9}>Best of 9</option>
+                    <option value="versus">1v1 Versus</option>
+                    <option value="leaderboard">Leaderboard (2–8)</option>
+                    <option value="wheel-only">Wheel Only / Raffle</option>
                   </select>
                 </label>
+                <label className="studio-field">
+                  <span>Draw Mode</span>
+                  <select
+                    className="studio-input"
+                    value={state.drawMode || 'eliminate'}
+                    onChange={(e) => updateRoomSetting({ drawMode: e.target.value })}
+                  >
+                    <option value="eliminate">Eliminate Winner</option>
+                    <option value="keep">Keep on Wheel</option>
+                  </select>
+                </label>
+                {state.mode === 'versus' && (
+                  <label className="studio-field">
+                    <span>{t('matchFormat')}</span>
+                    <select
+                      className="studio-input"
+                      value={state.bestOf}
+                      onChange={(e) => updateRoomSetting({ bestOf: Number(e.target.value) })}
+                    >
+                      <option value={0}>{t('freeplay')}</option>
+                      <option value={3}>Best of 3</option>
+                      <option value={5}>Best of 5</option>
+                      <option value={7}>Best of 7</option>
+                      <option value={9}>Best of 9</option>
+                    </select>
+                  </label>
+                )}
               </div>
 
+              {state.mode === 'leaderboard' && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <strong style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>
+                    Participants ({state.teams.length}/{MAX_LEADERBOARD_TEAMS})
+                  </strong>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    style={{ padding: '7px 14px', fontSize: 13 }}
+                    disabled={state.teams.length >= MAX_LEADERBOARD_TEAMS}
+                    onClick={addLeaderboardTeam}
+                  >
+                    <Plus size={14} /> Add Participant
+                  </button>
+                </div>
+              )}
+
               <div className="responsive-grid-2">
-                {state.teams.map((team, idx) => (
+                {visibleTeams.map((team, idx) => (
                   <div key={team.id} className="card-panel-active" style={{ padding: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                       <TeamAvatar name={team.name} logoUrl={team.logoUrl} color={team.color} textColor={team.textColor} size={42} />
-                      <strong style={{ fontSize: 15 }}>{idx === 0 ? 'Team A' : 'Team B'}</strong>
+                      <strong style={{ fontSize: 15 }}>{state.mode === 'versus' ? (idx === 0 ? 'Team A' : 'Team B') : `Participant #${idx + 1}`}</strong>
                       <input
                         type="color"
                         aria-label={`${team.name} color`}
@@ -1002,6 +1184,17 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                         onChange={(e) => updateTeamMeta(idx, 'color', e.target.value)}
                         style={{ marginLeft: 'auto', width: 38, height: 32, border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
+                      {state.mode === 'leaderboard' && state.teams.length > 2 && (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          style={{ padding: '6px 8px' }}
+                          onClick={() => removeLeaderboardTeam(idx)}
+                          aria-label={`Remove ${team.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
                       <input

@@ -94,6 +94,8 @@ export default async function handler(req, res) {
   const initialState = createPresetRoomState(presetId, {
     roomId,
     title,
+    mode: body.mode,
+    drawMode: body.drawMode,
     bestOf: body.bestOf,
     teams: body.teams,
     items: body.items,

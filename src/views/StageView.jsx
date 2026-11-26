@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { SyncEngine, getInitialState } from '../lib/sync';
 import { DEFAULT_ROOM_ID } from '../lib/roomSchema';
+import { resolveOverlayTheme } from '../lib/themes';
 import RouletteWheel from '../components/RouletteWheel';
 import { ScoreboardGraphic } from './ScoreboardOverlay';
 
@@ -12,7 +13,8 @@ export default function StageView({ roomId = DEFAULT_ROOM_ID }) {
     const params = new URLSearchParams(window.location.search);
     const soundParam = params.get('sound');
     return {
-      soundOverride: soundParam === '0' ? false : soundParam === '1' ? true : null
+      soundOverride: soundParam === '0' ? false : soundParam === '1' ? true : null,
+      themeOverride: params.get('theme') || null
     };
   }, []);
 
@@ -31,11 +33,31 @@ export default function StageView({ roomId = DEFAULT_ROOM_ID }) {
     ? queryOptions.soundOverride
     : state.soundEnabled !== false;
 
+  const activeTheme = queryOptions.themeOverride || state.theme;
+  const resolvedTheme = useMemo(
+    () => resolveOverlayTheme(activeTheme, state.accentColor),
+    [activeTheme, state.accentColor]
+  );
+
   return (
-    <div className="stage-screen">
+    <div
+      className="stage-screen"
+      style={{
+        ...resolvedTheme.cssVars,
+        background: resolvedTheme.stageBg,
+        color: resolvedTheme.textColor
+      }}
+    >
       <header className="stage-header">
-        <span className="pill-badge badge-dark">
-          <Sparkles size={14} color="var(--accent-gold)" /> ARENAOBS LIVE STAGE
+        <span
+          className="pill-badge"
+          style={{
+            backgroundColor: resolvedTheme.cardBg,
+            color: resolvedTheme.textColor,
+            borderColor: resolvedTheme.frameBorder
+          }}
+        >
+          <Sparkles size={14} color={resolvedTheme.rimColor} /> ARENAOBS LIVE STAGE
         </span>
         <h1 className="stage-title">{state.title}</h1>
       </header>
@@ -46,6 +68,8 @@ export default function StageView({ roomId = DEFAULT_ROOM_ID }) {
             items={state.items}
             teams={state.teams}
             title={state.title}
+            theme={activeTheme}
+            accentColor={state.accentColor}
             spin={state.spin}
             showWinnerModal={state.showWinnerModal}
             activeItem={state.activeItem}
@@ -55,11 +79,11 @@ export default function StageView({ roomId = DEFAULT_ROOM_ID }) {
         </div>
 
         <div className="stage-board-col">
-          <ScoreboardGraphic state={state} />
+          <ScoreboardGraphic state={state} themeOverride={queryOptions.themeOverride} />
         </div>
       </main>
 
-      <footer className="stage-footer">
+      <footer className="stage-footer" style={{ color: resolvedTheme.mutedColor }}>
         <span>ROOM · {roomId.toUpperCase()}</span>
         <span>{state.items.length} SEGMENTS ON WHEEL</span>
       </footer>

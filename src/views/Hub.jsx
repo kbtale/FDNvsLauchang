@@ -30,6 +30,7 @@ import {
   sanitizeMediaUrl
 } from '../lib/roomSchema';
 import { SLICE_COLORS } from '../lib/wheel';
+import { EVENT_BADGE_ICONS, OVERLAY_THEMES } from '../lib/themes';
 import { useI18n } from '../lib/i18n';
 import { navigateTo } from '../App';
 
@@ -43,6 +44,7 @@ export default function Hub() {
   const [selectedPresetId, setSelectedPresetId] = useState(defaultPreset.id);
   const [mode, setMode] = useState(defaultPreset.mode || 'versus');
   const [drawMode, setDrawMode] = useState(defaultPreset.drawMode || 'eliminate');
+  const [theme, setTheme] = useState(defaultPreset.theme || 'emerald-gold');
   const [title, setTitle] = useState(defaultPreset.title);
   const [customRoomId, setCustomRoomId] = useState('');
   const [password, setPassword] = useState(() => generateRandomPin());
@@ -170,6 +172,7 @@ export default function Hub() {
           presetId: selectedPresetId,
           mode,
           drawMode,
+          theme,
           title,
           roomId: customRoomId.trim() || undefined,
           password: password.trim(),
@@ -461,6 +464,19 @@ export default function Hub() {
                   >
                     <option value="eliminate">Eliminate Winner</option>
                     <option value="keep">Keep on Wheel</option>
+                  </select>
+                </label>
+
+                <label className="studio-field">
+                  <span>Overlay Theme</span>
+                  <select
+                    className="studio-input"
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value)}
+                  >
+                    {OVERLAY_THEMES.map((th) => (
+                      <option key={th.id} value={th.id}>{th.name}</option>
+                    ))}
                   </select>
                 </label>
 

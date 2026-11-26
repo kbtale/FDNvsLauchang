@@ -1,4 +1,5 @@
 import { BUILTIN_GAME_IMAGES, DEFAULT_SPIN_DURATION_MS, SLICE_COLORS } from './wheel.js';
+import { OVERLAY_THEMES } from './themes.js';
 
 export const DEFAULT_ROOM_ID = 'fdn-vs-lauchang';
 export const EVENT_MODES = ['versus', 'leaderboard', 'wheel-only'];
@@ -96,6 +97,18 @@ export function normalizeEventMode(raw, fallback = 'versus') {
 export function normalizeDrawMode(raw, fallback = 'eliminate') {
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
   return DRAW_MODES.includes(value) ? value : fallback;
+}
+
+export function normalizeThemeId(raw, fallback = 'emerald-gold') {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return OVERLAY_THEMES.some((t) => t.id === value) ? value : fallback;
+}
+
+export function sanitizeIconBadge(raw) {
+  if (typeof raw !== 'string') {
+    return '';
+  }
+  return raw.trim().slice(0, 8);
 }
 
 export function parseBulkSegments(rawText, startIndex = 0) {
@@ -379,6 +392,7 @@ export function normalizeItem(raw, index = 0) {
   return {
     id: typeof raw?.id === 'string' && raw.id.trim() ? raw.id.trim().slice(0, 48) : `item-${index + 1}`,
     label,
+    icon: sanitizeIconBadge(raw?.icon || ''),
     color: sanitizeHexColor(raw?.color, SLICE_COLORS[index % SLICE_COLORS.length].toLowerCase()),
     imageUrl: safeImageUrl,
     weight
@@ -396,6 +410,7 @@ export function normalizeTeam(raw, fallback, index = 0) {
   const rawName = typeof raw?.name === 'string' && raw.name.trim() ? raw.name.trim() : (fallback?.name || `PLAYER ${index + 1}`);
   const rawSubtitle = typeof raw?.subtitle === 'string' ? raw.subtitle.trim() : (fallback?.subtitle || '');
   const logoUrl = raw?.logoUrl !== undefined ? sanitizeMediaUrl(raw.logoUrl) : (fallback?.logoUrl || '');
+  const icon = raw?.icon !== undefined ? sanitizeIconBadge(raw.icon) : sanitizeIconBadge(fallback?.icon || '');
   const id = typeof raw?.id === 'string' && raw.id.trim()
     ? raw.id.trim().slice(0, 32)
     : (fallback?.id || `team-${index + 1}`);
@@ -407,6 +422,7 @@ export function normalizeTeam(raw, fallback, index = 0) {
     color,
     textColor,
     logoUrl,
+    icon,
     score
   };
 }
@@ -456,11 +472,16 @@ export function createPresetRoomState(presetId = 'versus-match', overrides = {})
     ? overrides.title.trim()
     : preset.title;
 
+  const theme = normalizeThemeId(overrides.theme, preset.theme || 'emerald-gold');
+  const accentColor = overrides.accentColor ? sanitizeHexColor(overrides.accentColor, '') : '';
+
   return {
     roomId,
     title: rawTitle.toUpperCase().slice(0, 64),
     mode,
     drawMode,
+    theme,
+    accentColor,
     teams,
     bestOf,
     items,
@@ -585,11 +606,16 @@ export function normalizeRoomState(raw, roomId = DEFAULT_ROOM_ID) {
     ? raw.title.trim().toUpperCase().slice(0, 64)
     : base.title;
 
+  const theme = normalizeThemeId(raw.theme, base.theme || 'emerald-gold');
+  const accentColor = raw.accentColor ? sanitizeHexColor(raw.accentColor, '') : '';
+
   return {
     roomId,
     title,
     mode,
     drawMode,
+    theme,
+    accentColor,
     teams,
     bestOf,
     items,

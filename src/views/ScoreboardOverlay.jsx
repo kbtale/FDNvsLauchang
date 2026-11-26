@@ -1,20 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { SyncEngine, getInitialState } from '../lib/sync';
 import { DEFAULT_ROOM_ID, sortLeaderboardTeams } from '../lib/roomSchema';
 import { formatScoreDelta } from '../lib/wheel';
+import { resolveOverlayTheme } from '../lib/themes';
 import TeamAvatar from '../components/TeamAvatar';
 import { Gamepad2, Sparkles, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = false }) {
+export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = false, themeOverride = null }) {
   const mode = state.mode || 'versus';
-  const activeLabel = state.activeItem?.label || 'WAITING FOR SPIN';
+  const activeLabel = state.activeItem?.label
+    ? `${state.activeItem.icon ? `${state.activeItem.icon} ` : ''}${state.activeItem.label}`
+    : 'WAITING FOR SPIN';
+  const resolvedTheme = useMemo(
+    () => resolveOverlayTheme(themeOverride || state.theme, state.accentColor),
+    [themeOverride, state.theme, state.accentColor]
+  );
 
   if (mode === 'wheel-only') {
     return (
-      <div className={`broadcast-wheel-banner ${compact ? 'broadcast-3d-compact' : ''}`}>
+      <div className={`broadcast-wheel-banner ${compact ? 'broadcast-3d-compact' : ''}`} style={resolvedTheme.cssVars}>
         <div className="broadcast-wheel-banner-top">
-          <Sparkles size={compact ? 14 : 18} color="var(--accent-gold)" />
+          <Sparkles size={compact ? 14 : 18} color={resolvedTheme.rimColor} />
           <span>{state.title}</span>
         </div>
         <div className="broadcast-wheel-banner-main">
@@ -27,10 +34,10 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
   if (mode === 'leaderboard') {
     const ranked = sortLeaderboardTeams(state.teams || []);
     return (
-      <div className={`broadcast-leaderboard ${compact ? 'broadcast-leaderboard-compact' : ''}`}>
+      <div className={`broadcast-leaderboard ${compact ? 'broadcast-leaderboard-compact' : ''}`} style={resolvedTheme.cssVars}>
         <div className="broadcast-leaderboard-header">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <Trophy size={compact ? 15 : 18} color="var(--accent-gold)" />
+            <Trophy size={compact ? 15 : 18} color={resolvedTheme.rimColor} />
             {state.title}
           </span>
           <span className="broadcast-leaderboard-active">{activeLabel}</span>
@@ -48,6 +55,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
               <TeamAvatar
                 name={team.name}
                 logoUrl={team.logoUrl}
+                icon={team.icon}
                 color={team.color}
                 textColor={team.textColor}
                 size={compact ? 30 : 40}
@@ -87,7 +95,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
   const deltaBLabel = formatScoreDelta(deltaB);
 
   return (
-    <div className={`broadcast-3d-scoreboard ${compact ? 'broadcast-3d-compact' : ''}`}>
+    <div className={`broadcast-3d-scoreboard ${compact ? 'broadcast-3d-compact' : ''}`} style={resolvedTheme.cssVars}>
       <div className="broadcast-3d-main-bar">
         <div
           className="broadcast-3d-team-card broadcast-3d-team-left"
@@ -97,6 +105,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
             <TeamAvatar
               name={teamA.name}
               logoUrl={teamA.logoUrl}
+              icon={teamA.icon}
               color={teamA.color}
               textColor={teamA.textColor}
               size={compact ? 40 : 66}
@@ -253,6 +262,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
             <TeamAvatar
               name={teamB.name}
               logoUrl={teamB.logoUrl}
+              icon={teamB.icon}
               color={teamB.color}
               textColor={teamB.textColor}
               size={compact ? 40 : 66}
@@ -263,7 +273,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
 
       <div className="broadcast-3d-bottom-wrapper">
         <div className="broadcast-3d-bottom-bar">
-          <Gamepad2 size={compact ? 15 : 20} color="var(--accent-gold)" style={{ flexShrink: 0 }} />
+          <Gamepad2 size={compact ? 15 : 20} color={resolvedTheme.rimColor} style={{ flexShrink: 0 }} />
           <span className="broadcast-3d-game-title" style={compact ? { fontSize: 13 } : undefined}>
             {activeLabel}
           </span>
@@ -275,6 +285,7 @@ export function ScoreboardGraphic({ state, deltaA = 0, deltaB = 0, compact = fal
 
 export default function ScoreboardOverlay({ roomId = DEFAULT_ROOM_ID }) {
   const [state, setState] = useState(() => getInitialState(roomId));
+  const themeOverride = useMemo(() => new URLSearchParams(window.location.search).get('theme') || null, []);
   const [deltaA, setDeltaA] = useState(0);
   const [deltaB, setDeltaB] = useState(0);
   const prevARef = useRef(state.teams?.[0]?.score || 0);
@@ -333,7 +344,7 @@ export default function ScoreboardOverlay({ roomId = DEFAULT_ROOM_ID }) {
 
   return (
     <div className="overlay-container transparent-bg" style={{ alignItems: 'flex-start', paddingTop: 20 }}>
-      <ScoreboardGraphic state={state} deltaA={deltaA} deltaB={deltaB} />
+      <ScoreboardGraphic state={state} deltaA={deltaA} deltaB={deltaB} themeOverride={themeOverride} />
     </div>
   );
 }

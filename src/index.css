@@ -348,8 +348,8 @@ html, body {
   display: grid;
   grid-template-columns: 1fr 78px 1fr;
   height: 108px;
-  background-color: #070e0c;
-  border: 3px solid #233a33;
+  background-color: var(--overlay-frame-bg, #070e0c);
+  border: 3px solid var(--overlay-frame-border, #233a33);
   border-radius: 14px;
   position: relative;
   overflow: visible;
@@ -521,7 +521,7 @@ html, body {
 }
 
 .broadcast-3d-divider {
-  background-color: #060b09;
+  background-color: var(--overlay-frame-bg, #060b09);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -529,17 +529,17 @@ html, body {
   z-index: 30;
   position: relative;
   overflow: visible;
-  border-left: 2px solid #1a2f28;
-  border-right: 2px solid #1a2f28;
+  border-left: 2px solid var(--overlay-frame-border, #1a2f28);
+  border-right: 2px solid var(--overlay-frame-border, #1a2f28);
 }
 
 .broadcast-3d-vs {
   font-size: 38px;
   font-weight: 950;
-  color: #d99b26;
+  color: var(--overlay-accent, #d99b26);
   letter-spacing: 2px;
   line-height: 1;
-  text-shadow: 0 0 18px rgba(217, 155, 38, 0.8), 0 3px 6px rgba(0, 0, 0, 0.95);
+  text-shadow: 0 0 18px rgba(217, 155, 38, 0.55), 0 3px 6px rgba(0, 0, 0, 0.75);
   transform: scale(1.15);
   white-space: nowrap;
   pointer-events: none;
@@ -556,8 +556,8 @@ html, body {
 }
 
 .broadcast-3d-bottom-bar {
-  background: linear-gradient(180deg, #0d221c 0%, #060e0b 100%);
-  border: 2px solid #1c3d33;
+  background: var(--overlay-card-bg, #0a1713);
+  border: 2px solid var(--overlay-frame-border, #1c3d33);
   border-top: none;
   padding: 8px 36px;
   display: inline-flex;
@@ -566,7 +566,7 @@ html, body {
   gap: 12px;
   border-radius: 0 0 14px 14px;
   clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.75);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
 }
 
 .broadcast-3d-game-title {
@@ -574,8 +574,7 @@ html, body {
   font-weight: 900;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  color: #ffffff;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+  color: var(--overlay-text, #ffffff);
   white-space: nowrap;
 }
 
@@ -916,12 +915,12 @@ html, body {
 .broadcast-wheel-banner {
   width: 92vw;
   max-width: 720px;
-  background: linear-gradient(180deg, #10201a 0%, #070e0c 100%);
-  border: 2px solid var(--accent-gold);
+  background: var(--overlay-card-bg, #0c1411);
+  border: 2px solid var(--overlay-accent, #d99b26);
   border-radius: 16px;
   padding: 16px 28px;
   text-align: center;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.78);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
 }
 
 .broadcast-wheel-banner-top {
@@ -931,7 +930,7 @@ html, body {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 1.5px;
-  color: var(--accent-gold);
+  color: var(--overlay-accent, #d99b26);
   text-transform: uppercase;
   margin-bottom: 6px;
 }
@@ -940,18 +939,19 @@ html, body {
   font-size: 30px;
   font-weight: 900;
   letter-spacing: 0.5px;
-  color: #ffffff;
+  color: var(--overlay-text, #ffffff);
   text-transform: uppercase;
 }
 
 .broadcast-leaderboard {
   width: 92vw;
   max-width: 560px;
-  background-color: rgba(9, 15, 13, 0.94);
-  border: 2px solid var(--border-highlight);
+  background-color: var(--overlay-card-bg, rgba(9, 15, 13, 0.94));
+  color: var(--overlay-text, #ffffff);
+  border: 2px solid var(--overlay-frame-border, #283a35);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.72);
 }
 
 .broadcast-leaderboard-compact {
@@ -965,8 +965,8 @@ html, body {
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  background-color: #101b17;
-  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--overlay-frame-bg, #101b17);
+  border-bottom: 1px solid var(--overlay-frame-border, #1e2b27);
   font-size: 14px;
   font-weight: 900;
   letter-spacing: 0.6px;
@@ -975,7 +975,7 @@ html, body {
 .broadcast-leaderboard-active {
   font-size: 11.5px;
   font-weight: 800;
-  color: var(--accent-gold);
+  color: var(--overlay-accent, #d99b26);
   text-transform: uppercase;
 }
 

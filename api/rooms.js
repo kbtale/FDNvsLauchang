@@ -96,6 +96,8 @@ export default async function handler(req, res) {
     title,
     mode: body.mode,
     drawMode: body.drawMode,
+    theme: body.theme,
+    accentColor: body.accentColor,
     bestOf: body.bestOf,
     teams: body.teams,
     items: body.items,

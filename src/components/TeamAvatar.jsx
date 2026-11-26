@@ -4,6 +4,7 @@ import { getTeamMonogram, pickContrastingTextColor, sanitizeHexColor, sanitizeMe
 export default function TeamAvatar({
   name = 'TEAM',
   logoUrl = '',
+  icon = '',
   color = '#0d9f67',
   textColor,
   size = 56,
@@ -58,13 +59,13 @@ export default function TeamAvatar({
         alignItems: 'center',
         justifyContent: 'center',
         fontWeight: 900,
-        fontSize: Math.max(12, Math.round(size * 0.36)),
+        fontSize: icon ? Math.max(16, Math.round(size * 0.48)) : Math.max(12, Math.round(size * 0.36)),
         letterSpacing: -0.5,
         flexShrink: 0,
         boxShadow: 'inset 0 2px 8px rgba(255,255,255,0.18)'
       }}
     >
-      {monogram}
+      {icon || monogram}
     </div>
   );
 }

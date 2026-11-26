@@ -10,9 +10,11 @@ export default function RouletteOverlay({ roomId = DEFAULT_ROOM_ID }) {
     const params = new URLSearchParams(window.location.search);
     const soundParam = params.get('sound');
     const sizeParam = Number(params.get('size'));
+    const themeParam = params.get('theme');
     return {
       soundOverride: soundParam === '0' ? false : soundParam === '1' ? true : null,
-      size: Number.isFinite(sizeParam) && sizeParam >= 240 && sizeParam <= 1000 ? sizeParam : 520
+      size: Number.isFinite(sizeParam) && sizeParam >= 240 && sizeParam <= 1000 ? sizeParam : 520,
+      themeOverride: themeParam || null
     };
   }, []);
 
@@ -37,6 +39,8 @@ export default function RouletteOverlay({ roomId = DEFAULT_ROOM_ID }) {
         items={state.items}
         teams={state.teams}
         title={state.title}
+        theme={queryOptions.themeOverride || state.theme}
+        accentColor={state.accentColor}
         spin={state.spin}
         showWinnerModal={state.showWinnerModal}
         activeItem={state.activeItem}

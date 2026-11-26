@@ -30,6 +30,7 @@ import {
   pickWeightedIndex
 } from '../lib/wheel';
 import { useI18n } from '../lib/i18n';
+import { EVENT_BADGE_ICONS, OVERLAY_THEMES } from '../lib/themes';
 import { resolveControlShortcut } from '../lib/shortcuts';
 import TeamAvatar from '../components/TeamAvatar';
 import RouletteWheel from '../components/RouletteWheel';
@@ -59,7 +60,8 @@ import {
   MonitorPlay,
   Languages,
   Database,
-  Keyboard
+  Keyboard,
+  Upload
 } from 'lucide-react';
 
 const LEGACY_TOKEN_KEY = 'fdn_lauchang_admin_token_v1';
@@ -87,8 +89,10 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
   const [syncEngine, setSyncEngine] = useState(null);
   const [newGameInput, setNewGameInput] = useState('');
   const [newGameColor, setNewGameColor] = useState('#0d9f67');
+  const [newGameIcon, setNewGameIcon] = useState('');
   const [newGameWeight, setNewGameWeight] = useState(1);
   const [newGameImageUrl, setNewGameImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -407,6 +411,7 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
     const newItem = {
       id: `seg-${Date.now()}`,
       label,
+      icon: newGameIcon,
       color: newGameColor || SLICE_COLORS[latest.items.length % SLICE_COLORS.length].toLowerCase(),
       imageUrl: sanitizeMediaUrl(newGameImageUrl),
       weight: Math.max(1, Math.min(10, Number(newGameWeight) || 1))
@@ -417,9 +422,52 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
       items: [...latest.items, newItem]
     });
     setNewGameInput('');
+    setNewGameIcon('');
     setNewGameImageUrl('');
     setNewGameWeight(1);
     toast.success(t('segmentAdded'), { description: label });
+  };
+
+  const uploadImageFile = async (file, onUploaded) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be 2 MB or smaller');
+      return;
+    }
+    const token = readStoredToken(roomId);
+    if (!token) return;
+    setIsUploading(true);
+    try {
+      const dataBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch(`/api/uploads?room=${encodeURIComponent(roomId)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          dataBase64
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        toast.error(data.error || 'Image upload failed');
+      } else {
+        onUploaded(data.url);
+        toast.success('Image uploaded');
+      }
+    } catch {
+      toast.error('Upload request failed');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleBulkImport = (replaceExisting) => {
@@ -857,6 +905,19 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                       disabled={isSpinning}
                       style={{ width: 38, height: 38, border: 'none', background: 'transparent', cursor: 'pointer' }}
                     />
+                    <select
+                      className="studio-input"
+                      aria-label="New segment icon"
+                      value={newGameIcon}
+                      disabled={isSpinning}
+                      onChange={(e) => setNewGameIcon(e.target.value)}
+                      style={{ width: 62, padding: '8px 6px' }}
+                    >
+                      <option value="">—</option>
+                      {EVENT_BADGE_ICONS.map((ic) => (
+                        <option key={ic} value={ic}>{ic}</option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       placeholder={t('newSegmentPlaceholder')}
@@ -882,14 +943,31 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                       <Plus size={16} /> {t('add')}
                     </button>
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Optional https:// banner image URL"
-                    value={newGameImageUrl}
-                    disabled={isSpinning}
-                    onChange={(e) => setNewGameImageUrl(e.target.value)}
-                    className="studio-input"
-                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="Optional https:// banner image URL"
+                      value={newGameImageUrl}
+                      disabled={isSpinning}
+                      onChange={(e) => setNewGameImageUrl(e.target.value)}
+                      className="studio-input"
+                      style={{ flex: 1 }}
+                    />
+                    <label className="btn-secondary" style={{ padding: '8px 12px', cursor: isUploading ? 'wait' : 'pointer' }}>
+                      <Upload size={14} />
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={isSpinning || isUploading}
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          uploadImageFile(file, (url) => setNewGameImageUrl(url));
+                        }}
+                      />
+                    </label>
+                  </div>
                 </form>
 
                 <div style={{ marginBottom: 16 }}>
@@ -1057,6 +1135,8 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                     items={state.items}
                     teams={state.teams}
                     title={state.title}
+                    theme={state.theme}
+                    accentColor={state.accentColor}
                     spin={state.spin}
                     showWinnerModal={state.showWinnerModal}
                     activeItem={state.activeItem}
@@ -1136,6 +1216,40 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                     <option value="keep">Keep on Wheel</option>
                   </select>
                 </label>
+                <label className="studio-field">
+                  <span>Overlay Theme</span>
+                  <select
+                    className="studio-input"
+                    value={state.theme || 'emerald-gold'}
+                    onChange={(e) => updateRoomSetting({ theme: e.target.value, accentColor: '' })}
+                  >
+                    {OVERLAY_THEMES.map((th) => (
+                      <option key={th.id} value={th.id}>{th.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="studio-field">
+                  <span>Custom Accent</span>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      aria-label="Custom accent color"
+                      value={state.accentColor || '#d99b26'}
+                      onChange={(e) => updateRoomSetting({ accentColor: e.target.value })}
+                      style={{ width: 42, height: 38, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                    />
+                    {state.accentColor && (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        style={{ padding: '7px 10px', fontSize: 12 }}
+                        onClick={() => updateRoomSetting({ accentColor: '' })}
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </label>
                 {state.mode === 'versus' && (
                   <label className="studio-field">
                     <span>{t('matchFormat')}</span>
@@ -1175,14 +1289,26 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                 {visibleTeams.map((team, idx) => (
                   <div key={team.id} className="card-panel-active" style={{ padding: 16 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                      <TeamAvatar name={team.name} logoUrl={team.logoUrl} color={team.color} textColor={team.textColor} size={42} />
+                      <TeamAvatar name={team.name} logoUrl={team.logoUrl} icon={team.icon} color={team.color} textColor={team.textColor} size={42} />
                       <strong style={{ fontSize: 15 }}>{state.mode === 'versus' ? (idx === 0 ? 'Team A' : 'Team B') : `Participant #${idx + 1}`}</strong>
+                      <select
+                        className="studio-input"
+                        aria-label={`${team.name} icon`}
+                        value={team.icon || ''}
+                        onChange={(e) => updateTeamMeta(idx, 'icon', e.target.value)}
+                        style={{ width: 64, padding: '6px', marginLeft: 'auto' }}
+                      >
+                        <option value="">Aa</option>
+                        {EVENT_BADGE_ICONS.map((ic) => (
+                          <option key={ic} value={ic}>{ic}</option>
+                        ))}
+                      </select>
                       <input
                         type="color"
                         aria-label={`${team.name} color`}
                         value={team.color}
                         onChange={(e) => updateTeamMeta(idx, 'color', e.target.value)}
-                        style={{ marginLeft: 'auto', width: 38, height: 32, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        style={{ width: 38, height: 32, border: 'none', background: 'transparent', cursor: 'pointer' }}
                       />
                       {state.mode === 'leaderboard' && state.teams.length > 2 && (
                         <button
@@ -1212,13 +1338,30 @@ export default function ControlPanel({ roomId = DEFAULT_ROOM_ID, legacyRoute = f
                         placeholder="Subtitle"
                       />
                     </div>
-                    <input
-                      type="text"
-                      className="studio-input"
-                      value={team.logoUrl}
-                      onChange={(e) => updateTeamMeta(idx, 'logoUrl', e.target.value)}
-                      placeholder="Logo URL (https://... or /...)"
-                    />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text"
+                        className="studio-input"
+                        value={team.logoUrl}
+                        onChange={(e) => updateTeamMeta(idx, 'logoUrl', e.target.value)}
+                        placeholder="Logo URL (https://... or upload)"
+                        style={{ flex: 1 }}
+                      />
+                      <label className="btn-secondary" style={{ padding: '8px 12px', cursor: isUploading ? 'wait' : 'pointer' }} title="Upload PNG/JPEG/WebP logo">
+                        <Upload size={14} />
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          disabled={isUploading}
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = '';
+                            uploadImageFile(file, (url) => updateTeamMeta(idx, 'logoUrl', url));
+                          }}
+                        />
+                      </label>
+                    </div>
                   </div>
                 ))}
               </div>
